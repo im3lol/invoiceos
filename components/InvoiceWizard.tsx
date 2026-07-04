@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import type { Customer, Invoice, InvoiceLine, InvoiceStatus, Product, Supplier } from "@/lib/domain";
 import { genId } from "@/lib/domain";
 import type { Column, TemplateRecord } from "@/lib/templateTypes";
@@ -49,6 +49,7 @@ export default function InvoiceWizard({
   const [saving, setSaving] = useState(false);
   const [productQuery, setProductQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [quickAdd, setQuickAdd] = useState<Kind | null>(null);
 
   const [draft, setDraft] = useState<Draft>(() =>
@@ -231,6 +232,7 @@ export default function InvoiceWizard({
               <div style={{ position: "relative", marginBottom: 12 }}>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input
+                    ref={searchRef}
                     value={productQuery}
                     onChange={(e) => setProductQuery(e.target.value)}
                     onFocus={() => setSearchFocused(true)}
@@ -243,7 +245,7 @@ export default function InvoiceWizard({
                 {searchFocused && dropList.length > 0 && (
                   <div style={{ position: "absolute", zIndex: 20, left: 0, right: 0, top: 44, background: "#fff", border: "1px solid #e2e8f5", borderRadius: 11, boxShadow: "0 14px 34px rgba(20,30,60,.18)", overflow: "auto", maxHeight: 300 }}>
                     {dropList.map((m) => (
-                      <div key={m.id} className="dc-hover-row" onMouseDown={(e) => { e.preventDefault(); addProduct(m.id); }} style={{ display: "flex", justifyContent: "space-between", padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid #f4f6fb" }}>
+                      <div key={m.id} className="dc-hover-row" onMouseDown={(e) => { e.preventDefault(); addProduct(m.id); setProductQuery(""); setSearchFocused(false); searchRef.current?.blur(); }} style={{ display: "flex", justifyContent: "space-between", padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid #f4f6fb" }}>
                         <div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{m.title}</div><div style={{ fontSize: 10, color: "#9aa3b5", fontWeight: 600 }}>Barcode {m.asin} · {m.sku}</div></div>
                         <div style={{ fontSize: 12.5, fontWeight: 800, color: "#2f6bed" }}>{money(m.unitPrice, draft.currency)}</div>
                       </div>
