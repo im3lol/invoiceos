@@ -48,6 +48,8 @@ export default function TemplateBuilder() {
   const [saving, setSaving] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [activeZone, setActiveZone] = useState<number | null>(null);
+  // "gallery" = landing grid of saved templates; "editor" = the drag-drop canvas.
+  const [mode, setMode] = useState<"gallery" | "editor">("gallery");
 
   const dragRef = useRef<DragPayload>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -183,13 +185,22 @@ export default function TemplateBuilder() {
     setHist({ doc: clone(rec.doc), past: [], future: [] });
     setCurrentId(rec.id);
     setSelectedId(null);
+    setMode("editor");
   }, []);
 
   const newTemplate = useCallback(() => {
     setHist({ doc: defaultDoc(), past: [], future: [] });
     setCurrentId(null);
     setSelectedId(null);
+    setMode("editor");
   }, []);
+
+  // Return to the gallery, refreshing the list so it reflects the latest saves.
+  const backToGallery = useCallback(() => {
+    setMode("gallery");
+    setSelectedId(null);
+    refreshTemplates();
+  }, [refreshTemplates]);
 
   const removeTemplate = useCallback(
     async (rec: TemplateRecord) => {
@@ -223,6 +234,62 @@ export default function TemplateBuilder() {
   const canUndo = hist.past.length > 0;
   const canRedo = hist.future.length > 0;
 
+  /* ================= Gallery (landing) ================= */
+  if (mode === "gallery") {
+    const galleryCard: React.CSSProperties = { background: "#fff", border: "1px solid #eef1f7", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 10px rgba(20,30,60,.04)" };
+    return (
+      <div style={{ animation: "fadein .3s ease" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>Your Templates</div>
+            <div style={{ fontSize: 12.5, color: "#9aa3b5", fontWeight: 600 }}>
+              {templates.length} saved · click a template to edit, or start a new one
+            </div>
+          </div>
+          <button onClick={newTemplate} style={primaryBtn}>＋ New Template</button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 16 }}>
+          {/* New-template tile */}
+          <button
+            onClick={newTemplate}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 250, border: "2px dashed #cbd6ee", borderRadius: 14, background: "#f8faff", cursor: "pointer" }}
+          >
+            <div style={{ fontSize: 34, color: "#2f6bed", lineHeight: 1 }}>＋</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#2f6bed" }}>New Template</div>
+            <div style={{ fontSize: 11, color: "#9aa3b5", fontWeight: 600 }}>Start from a blank A4 page</div>
+          </button>
+
+          {templates.map((t) => (
+            <div key={t.id} style={galleryCard}>
+              <div onClick={() => loadTemplate(t)} style={{ cursor: "pointer", height: 200, overflow: "hidden", background: "#f4f7fd", borderBottom: "1px solid #eef1f7", position: "relative" }}>
+                <div style={{ transform: "scale(.34)", transformOrigin: "top left", width: 640, pointerEvents: "none" }}>
+                  <PreviewPaper doc={t.doc} />
+                </div>
+                {t.published && <span style={{ position: "absolute", top: 8, right: 8, fontSize: 9, color: "#1f9d63", fontWeight: 800, background: "#e5f6ec", padding: "2px 7px", borderRadius: 20 }}>● LIVE</span>}
+              </div>
+              <div style={{ padding: "11px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <div onClick={() => loadTemplate(t)} style={{ cursor: "pointer", minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
+                  <div style={{ fontSize: 10.5, color: "#9aa3b5", fontWeight: 600 }}>{(t.doc?.blocks?.length ?? 0)} blocks{t.published ? " · live" : " · draft"}</div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flex: "0 0 auto" }}>
+                  <button onClick={() => loadTemplate(t)} style={{ border: "1px solid #dfe7f8", background: "#eef4fe", color: "#2f6bed", fontWeight: 800, fontSize: 11.5, padding: "6px 11px", borderRadius: 8, cursor: "pointer" }}>Edit</button>
+                  <button onClick={() => removeTemplate(t)} title="Delete" style={{ border: "1px solid #f6dfe0", background: "#fff", color: "#d64545", fontWeight: 800, width: 30, height: 30, borderRadius: 8, cursor: "pointer" }}>×</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <span style={{ display: "block", marginTop: 16, fontSize: 11, color: usingSupabase ? "#1f9d63" : "#e0912f", fontWeight: 700 }}>
+          {usingSupabase ? "● Saving to Supabase" : "● Local only — Supabase not configured"}
+        </span>
+      </div>
+    );
+  }
+
+  /* ================= Editor ================= */
   return (
     <div style={{ animation: "fadein .3s ease" }}>
       {/* ---------------- Toolbar ---------------- */}
@@ -240,6 +307,8 @@ export default function TemplateBuilder() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={backToGallery} style={{ ...ghostBtn, fontWeight: 800 }} title="Back to templates">← Templates</button>
+          <div style={{ width: 1, height: 22, background: "#eef1f7", margin: "0 6px" }} />
           <TBtn onClick={undo} disabled={!canUndo} title="Undo">↺</TBtn>
           <TBtn onClick={redo} disabled={!canRedo} title="Redo">↻</TBtn>
           <div style={{ width: 1, height: 22, background: "#eef1f7", margin: "0 6px" }} />
