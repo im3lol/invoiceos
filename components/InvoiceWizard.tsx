@@ -4,7 +4,7 @@ import React, { useMemo, useRef, useState } from "react";
 import type { Customer, Invoice, InvoiceLine, InvoiceStatus, Product, Supplier } from "@/lib/domain";
 import { genId } from "@/lib/domain";
 import type { Column, TemplateRecord } from "@/lib/templateTypes";
-import { compLine, compTotals, money, CURRENCIES } from "@/lib/calc";
+import { compLine, compTotals, money, CURRENCIES, taxOf } from "@/lib/calc";
 import InvoicePaper from "./InvoicePaper";
 
 type Kind = "suppliers" | "customers";
@@ -19,6 +19,8 @@ interface Draft {
   customerId: string;
   templateId: string | null;
   amountPaid: number;
+  taxEnabled: boolean;
+  taxRate: number;
   lines: InvoiceLine[];
 }
 
@@ -64,6 +66,8 @@ export default function InvoiceWizard({
           customerId: initial.customerId,
           templateId: initial.templateId,
           amountPaid: initial.amountPaid,
+          taxEnabled: !!initial.taxEnabled,
+          taxRate: +initial.taxRate || 0,
           lines: initial.lines.map((l) => ({ ...l })),
         }
       : {
@@ -76,12 +80,19 @@ export default function InvoiceWizard({
           customerId: customers[0]?.id || "",
           templateId: templates[0]?.id || null,
           amountPaid: 0,
+          taxEnabled: !!suppliers[0]?.taxEnabled,
+          taxRate: +(suppliers[0]?.taxRate ?? 0) || 0,
           lines: [],
         },
   );
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
-  const totals = compTotals(draft.lines, draft.amountPaid);
+  // Picking a company pulls in its tax setting (rate + on/off) for this invoice.
+  const selectSupplier = (id: string) => {
+    const s = suppliers.find((x) => x.id === id);
+    setDraft((d) => ({ ...d, supplierId: id, taxEnabled: !!s?.taxEnabled, taxRate: +(s?.taxRate ?? 0) || 0 }));
+  };
+  const totals = compTotals(draft.lines, draft.amountPaid, taxOf(draft));
 
   /* build the render-ready Invoice from the draft */
   const buildInvoice = (): Invoice => {
@@ -104,7 +115,9 @@ export default function InvoiceWizard({
       template: tpl ? tpl.doc : null,
       lines: draft.lines,
       amountPaid: draft.amountPaid,
-      total: compTotals(draft.lines, draft.amountPaid).total,
+      taxEnabled: draft.taxEnabled,
+      taxRate: draft.taxRate,
+      total: compTotals(draft.lines, draft.amountPaid, taxOf(draft)).total,
     };
   };
 
@@ -118,12 +131,12 @@ export default function InvoiceWizard({
       const lines = [...d.lines];
       const ex = lines.findIndex((l) => l.productId === pid);
       if (ex >= 0) lines[ex] = { ...lines[ex], qty: (+lines[ex].qty || 0) + 1 };
-      else lines.push({ productId: p.id, description: p.title, asin: p.asin, qty: 1, unitPrice: p.unitPrice, discountPct: p.discountPct, taxPct: p.taxPct });
+      else lines.push({ productId: p.id, description: p.title, asin: p.asin, qty: 1, unitPrice: p.unitPrice, discountPct: p.discountPct });
       return { ...d, lines };
     });
     setProductQuery("");
   };
-  const addBlank = () => setDraft((d) => ({ ...d, lines: [...d.lines, { productId: "", description: "", asin: "—", qty: 1, unitPrice: 0, discountPct: 0, taxPct: 0 }] }));
+  const addBlank = () => setDraft((d) => ({ ...d, lines: [...d.lines, { productId: "", description: "", asin: "—", qty: 1, unitPrice: 0, discountPct: 0 }] }));
   const patchLine = (i: number, patch: Partial<InvoiceLine>) => setDraft((d) => ({ ...d, lines: d.lines.map((l, idx) => (idx === i ? { ...l, ...patch } : l)) }));
   const removeLine = (i: number) => setDraft((d) => ({ ...d, lines: d.lines.filter((_, idx) => idx !== i) }));
 
@@ -204,7 +217,7 @@ export default function InvoiceWizard({
             <>
               <H>Parties & invoice details</H>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                <PartyPicker label="Your Company (Seller)" value={draft.supplierId} onChange={(v) => set({ supplierId: v })} options={suppliers.map((s) => ({ id: s.id, label: s.name }))} onAdd={() => setQuickAdd("suppliers")} />
+                <PartyPicker label="Your Company (Seller)" value={draft.supplierId} onChange={selectSupplier} options={suppliers.map((s) => ({ id: s.id, label: s.name }))} onAdd={() => setQuickAdd("suppliers")} />
                 <PartyPicker label="Bill To (Customer)" value={draft.customerId} onChange={(v) => set({ customerId: v })} options={customers.map((c) => ({ id: c.id, label: c.store }))} onAdd={() => setQuickAdd("customers")} />
                 <Field label="Invoice #"><input value={draft.number} onChange={(e) => set({ number: e.target.value })} style={inp} /></Field>
                 <Field label="Currency">
@@ -261,11 +274,10 @@ export default function InvoiceWizard({
                       <input value={l.description} onChange={(e) => patchLine(i, { description: e.target.value })} placeholder="Item description" style={{ ...inp, flex: 1, fontWeight: 700 }} />
                       <button onClick={() => removeLine(i)} style={{ border: "none", background: "#f6ecec", color: "#d64545", fontWeight: 800, width: 28, height: 28, borderRadius: 7, cursor: "pointer" }}>×</button>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 6, alignItems: "end" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 6, alignItems: "end" }}>
                       <Mini label="QTY"><input value={String(l.qty)} onChange={(e) => patchLine(i, { qty: e.target.value })} style={miniInp} /></Mini>
                       <Mini label="PRICE"><input value={String(l.unitPrice)} onChange={(e) => patchLine(i, { unitPrice: e.target.value })} style={miniInp} /></Mini>
                       <Mini label="DISC%"><input value={String(l.discountPct)} onChange={(e) => patchLine(i, { discountPct: e.target.value })} style={miniInp} /></Mini>
-                      <Mini label="TAX%"><input value={String(l.taxPct)} onChange={(e) => patchLine(i, { taxPct: e.target.value })} style={miniInp} /></Mini>
                       <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 800, fontFamily: "'Space Grotesk'", minWidth: 84 }}>{money(compLine(l).total, draft.currency)}</div>
                     </div>
                     {customCols.length > 0 && (
@@ -303,7 +315,15 @@ export default function InvoiceWizard({
             <div style={card}>
               <Row k="Subtotal" v={money(totals.subtotal, draft.currency)} />
               <Row k="Discount" v={"−" + money(totals.discount, draft.currency)} c="#d64545" />
-              <Row k="Tax" v={money(totals.taxTotal, draft.currency)} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#5b6478", cursor: "pointer" }}>
+                  <input type="checkbox" checked={draft.taxEnabled} onChange={(e) => set({ taxEnabled: e.target.checked })} style={{ accentColor: "#2f6bed" }} />
+                  Tax
+                  <input value={String(draft.taxRate)} onChange={(e) => set({ taxRate: +e.target.value || 0 })} disabled={!draft.taxEnabled} style={{ width: 46, padding: "3px 6px", border: "1px solid #e2e8f5", borderRadius: 6, fontSize: 11.5, fontWeight: 700, textAlign: "right", opacity: draft.taxEnabled ? 1 : 0.5 }} />
+                  <span style={{ color: "#9aa3b5" }}>%</span>
+                </label>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>{money(totals.taxTotal, draft.currency)}</span>
+              </div>
               <div style={{ height: 1, background: "#eef1f7", margin: "6px 0" }} />
               <Row k="Total" v={money(totals.total, draft.currency)} strong />
             </div>

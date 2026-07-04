@@ -1,4 +1,4 @@
-import { compTotals } from "./calc";
+import { compTotals, taxOf } from "./calc";
 import { Customer, genId, Invoice, InvoiceLine, Product, Supplier } from "./domain";
 import { defaultDoc, TemplateDoc, TemplateRecord } from "./templateTypes";
 import { saveEntity } from "./entitiesApi";
@@ -23,9 +23,9 @@ export function defaultTemplates(): TemplateDoc[] {
 }
 
 const DEMO_SUPPLIERS: Omit<Supplier, "id">[] = [
-  { name: "Zylker Dezigns", legal: "Zylker Dezigns LLC", taxId: "TRN 3001234567890", email: "billing@zylker.com", phone: "+966 55 000 1234", addr: "P.O. Box 8223, Tahlia Street, Jeddah, KSA", website: "www.zylkerdezigns.com", logoText: "ZD" },
-  { name: "Saldo Apps", legal: "Saldo Apps Inc.", taxId: "EIN 88-1234567", email: "wiz@saldoapps.com", phone: "+1 802 969 7959", addr: "First str. 28-32, Chicago, IL, USA", website: "www.saldoapps.com", logoText: "SA" },
-  { name: "ZapBuy Trading", legal: "ZapBuy Trading Co.", taxId: "EIN 47-7654321", email: "support@zapbuy.com", phone: "+1 654 123 123", addr: "3647 Confederate Drive, Syracuse, NY", website: "www.zapbuy.com", logoText: "ZB" },
+  { name: "Zylker Dezigns", legal: "Zylker Dezigns LLC", taxId: "TRN 3001234567890", email: "billing@zylker.com", phone: "+966 55 000 1234", addr: "P.O. Box 8223, Tahlia Street, Jeddah, KSA", website: "www.zylkerdezigns.com", logoText: "ZD", taxEnabled: true, taxRate: 14 },
+  { name: "Saldo Apps", legal: "Saldo Apps Inc.", taxId: "EIN 88-1234567", email: "wiz@saldoapps.com", phone: "+1 802 969 7959", addr: "First str. 28-32, Chicago, IL, USA", website: "www.saldoapps.com", logoText: "SA", taxEnabled: false, taxRate: 0 },
+  { name: "ZapBuy Trading", legal: "ZapBuy Trading Co.", taxId: "EIN 47-7654321", email: "support@zapbuy.com", phone: "+1 654 123 123", addr: "3647 Confederate Drive, Syracuse, NY", website: "www.zapbuy.com", logoText: "ZB", taxEnabled: true, taxRate: 8 },
 ];
 const DEMO_CUSTOMERS: Omit<Customer, "id">[] = [
   { store: "Shepard Corp", contact: "Shepard Corp.", email: "shepard@mail.com", phone: "+1 802 969 7959", billing: "North str. 32, Chicago, IL, USA", shipping: "North str. 32, Chicago, IL, USA", track: "RO80296979597" },
@@ -33,13 +33,13 @@ const DEMO_CUSTOMERS: Omit<Customer, "id">[] = [
   { store: "Yesenia Retail", contact: "Yesenia M. Lawrence", email: "yesenia@youraddress.com", phone: "+1 555 987 123", billing: "3647 Confederate Drive, Syracuse, NY 13221", shipping: "3647 Confederate Drive, Syracuse, NY 13221", track: "RO99887766" },
 ];
 const DEMO_PRODUCTS: Omit<Product, "id">[] = [
-  { title: "Wireless Earbuds Pro", asin: "B09ABC1234", sku: "WEP-001", unitPrice: 79.99, taxPct: 8.25, discountPct: 0 },
-  { title: "4K Action Camera", asin: "B08DEF5678", sku: "ACM-4K", unitPrice: 129.0, taxPct: 8.25, discountPct: 5 },
-  { title: "Stainless Steel Water Bottle", asin: "B07GHI9012", sku: "SWB-32", unitPrice: 24.5, taxPct: 5, discountPct: 0 },
-  { title: "LED Desk Lamp", asin: "B08JKL3456", sku: "LDL-10", unitPrice: 39.99, taxPct: 8.25, discountPct: 10 },
-  { title: "Bluetooth Speaker Mini", asin: "B09MNO7890", sku: "BSM-05", unitPrice: 45.0, taxPct: 8.25, discountPct: 0 },
-  { title: "ToasterMaster Toaster", asin: "B07TST0432", sku: "BHT432", unitPrice: 50.0, taxPct: 0, discountPct: 2 },
-  { title: "QuickHeat Pro Microwave", asin: "B08MWA0789", sku: "A789", unitPrice: 150.0, taxPct: 0, discountPct: 10 },
+  { title: "Wireless Earbuds Pro", asin: "B09ABC1234", sku: "WEP-001", unitPrice: 79.99, discountPct: 0 },
+  { title: "4K Action Camera", asin: "B08DEF5678", sku: "ACM-4K", unitPrice: 129.0, discountPct: 5 },
+  { title: "Stainless Steel Water Bottle", asin: "B07GHI9012", sku: "SWB-32", unitPrice: 24.5, discountPct: 0 },
+  { title: "LED Desk Lamp", asin: "B08JKL3456", sku: "LDL-10", unitPrice: 39.99, discountPct: 10 },
+  { title: "Bluetooth Speaker Mini", asin: "B09MNO7890", sku: "BSM-05", unitPrice: 45.0, discountPct: 0 },
+  { title: "ToasterMaster Toaster", asin: "B07TST0432", sku: "BHT432", unitPrice: 50.0, discountPct: 2 },
+  { title: "QuickHeat Pro Microwave", asin: "B08MWA0789", sku: "A789", unitPrice: 150.0, discountPct: 10 },
 ];
 // [number, status, date, dueDate, amountPaid, supplierIdx, customerIdx, templateIdx, lines:[[productIdx, qty]]]
 const DEMO_INVOICES: Array<{ number: string; status: Invoice["status"]; date: string; dueDate: string; paid: number; s: number; c: number; t: number; lines: [number, number][] }> = [
@@ -61,7 +61,7 @@ function buildDemoInvoices(sups: Supplier[], cuss: Customer[], prds: Product[], 
     const tpl = tpls[d.t % tpls.length];
     const lines: InvoiceLine[] = d.lines.map(([pi, qty]) => {
       const p = prds[pi];
-      return { productId: p.id, description: p.title, asin: p.asin, qty, unitPrice: p.unitPrice, discountPct: p.discountPct, taxPct: p.taxPct };
+      return { productId: p.id, description: p.title, asin: p.asin, qty, unitPrice: p.unitPrice, discountPct: p.discountPct };
     });
     const inv: Invoice = {
       id: genId("i"),
@@ -79,7 +79,9 @@ function buildDemoInvoices(sups: Supplier[], cuss: Customer[], prds: Product[], 
       template: tpl ? tpl.doc : null,
       lines,
       amountPaid: d.paid,
-      total: compTotals(lines, d.paid).total,
+      taxEnabled: !!supplier.taxEnabled,
+      taxRate: +(supplier.taxRate ?? 0) || 0,
+      total: compTotals(lines, d.paid, taxOf(supplier)).total,
     };
     return inv;
   });

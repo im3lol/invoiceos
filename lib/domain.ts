@@ -13,6 +13,8 @@ export interface Supplier {
   website?: string;
   logoText: string;
   logoImage?: string; // data URL of an uploaded logo (optional)
+  taxEnabled?: boolean; // whether this company charges tax on its invoices
+  taxRate?: number; // tax percentage applied to the whole invoice (e.g. 14)
 }
 export interface Customer {
   id: string;
@@ -30,7 +32,6 @@ export interface Product {
   asin: string;
   sku: string;
   unitPrice: number;
-  taxPct: number;
   discountPct: number;
 }
 export interface InvoiceLine {
@@ -40,7 +41,6 @@ export interface InvoiceLine {
   qty: number | string;
   unitPrice: number | string;
   discountPct: number | string;
-  taxPct: number | string;
   custom?: Record<string, string>; // values for template custom columns, keyed by column id
 }
 export type InvoiceStatus = "Paid" | "Pending" | "Overdue";
@@ -63,6 +63,8 @@ export interface Invoice {
   template: TemplateDoc | null;
   lines: InvoiceLine[];
   amountPaid: number;
+  taxEnabled: boolean; // snapshot of the company's tax setting (toggleable per invoice)
+  taxRate: number; // tax percentage applied to this invoice
   total: number;
 }
 

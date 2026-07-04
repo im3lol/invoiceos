@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import type { Invoice, InvoiceStatus } from "@/lib/domain";
-import { compTotals, money } from "@/lib/calc";
+import { compTotals, money, taxOf } from "@/lib/calc";
 
 const STATUSES: InvoiceStatus[] = ["Paid", "Pending", "Overdue"];
 const stColor = (s: string) => (s === "Paid" ? { bg: "#e5f6ec", fg: "#1f9d63" } : s === "Overdue" ? { bg: "#fdeaea", fg: "#d64545" } : { bg: "#fef4e3", fg: "#e0912f" });
@@ -37,7 +37,7 @@ export default function InvoicesView({
       if (!ql) return true;
       return (i.number + " " + (i.customer?.store || "") + " " + i.templateName).toLowerCase().includes(ql);
     });
-    if (sort === "amount") list = [...list].sort((a, b) => compTotals(b.lines, b.amountPaid).total - compTotals(a.lines, a.amountPaid).total);
+    if (sort === "amount") list = [...list].sort((a, b) => compTotals(b.lines, b.amountPaid, taxOf(b)).total - compTotals(a.lines, a.amountPaid, taxOf(a)).total);
     return list;
   }, [invoices, q, status, sort]);
 
@@ -96,7 +96,7 @@ export default function InvoicesView({
           </thead>
           <tbody>
             {rows.map((inv) => {
-              const t = compTotals(inv.lines, inv.amountPaid);
+              const t = compTotals(inv.lines, inv.amountPaid, taxOf(inv));
               const c = stColor(inv.status);
               return (
                 <tr key={inv.id}>

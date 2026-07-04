@@ -4,7 +4,7 @@ import React from "react";
 import type { Block, ColField, Column, TemplateDoc } from "@/lib/templateTypes";
 import { defaultDoc, fontFamily } from "@/lib/templateTypes";
 import type { Invoice, InvoiceLine } from "@/lib/domain";
-import { compLine, compTotals, money } from "@/lib/calc";
+import { compLine, compTotals, money, taxOf } from "@/lib/calc";
 
 interface RenderCol { id: string; label: string; field: ColField; align: Column["align"]; flex: number }
 
@@ -17,7 +17,6 @@ const STD_COLS: RenderCol[] = [
   { id: "s-qty", label: "Qty", field: "qty", align: "right", flex: 0.6 },
   { id: "s-rate", label: "Rate", field: "rate", align: "right", flex: 0.9 },
   { id: "s-disc", label: "Disc", field: "discount", align: "right", flex: 0.6 },
-  { id: "s-tax", label: "Tax", field: "tax", align: "right", flex: 0.6 },
   { id: "s-amt", label: "Amount", field: "amount", align: "right", flex: 1 },
 ];
 
@@ -29,7 +28,6 @@ function cellValue(col: RenderCol, l: InvoiceLine, i: number, cur: string): Reac
     case "qty": return l.qty;
     case "rate": return money(+l.unitPrice, cur);
     case "discount": return (+l.discountPct || 0) + "%";
-    case "tax": return (+l.taxPct || 0) + "%";
     case "amount": return money(compLine(l).total, cur);
     case "custom": return (l.custom && l.custom[col.id]) || "";
     default: return "";
@@ -131,7 +129,8 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
       );
     case "productTable": {
       const raw = (p.columns as Column[]) || [];
-      const bound = raw.filter((c) => !c.hidden && c.field).map((c) => ({ id: c.id, label: c.label, field: c.field as ColField, align: c.align, flex: c.flex }));
+      // Tax is invoice-level now (a totals line), so drop any legacy per-row tax column.
+      const bound = raw.filter((c) => !c.hidden && c.field && (c.field as string) !== "tax").map((c) => ({ id: c.id, label: c.label, field: c.field as ColField, align: c.align, flex: c.flex }));
       const cols: RenderCol[] = bound.length ? bound : STD_COLS;
       const gt = cols.map((c) => c.flex + "fr").join(" ");
       return (
@@ -163,7 +162,7 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
       );
     }
     case "totals": {
-      const t = compTotals(invoice.lines, invoice.amountPaid);
+      const t = compTotals(invoice.lines, invoice.amountPaid, taxOf(invoice));
       const row = (label: string, val: string, strong?: boolean, color?: string) => (
         <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: strong ? 14 : 12, fontWeight: strong ? 800 : 500 }}>
           <span style={{ color: strong ? "#1e2433" : muted }}>{label}</span>
@@ -175,7 +174,7 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
           <div style={{ width: 270 }}>
             {row("Subtotal", money(t.subtotal, cur))}
             {row("Discount", "−" + money(t.discount, cur), false, "#d64545")}
-            {row("Tax", money(t.taxTotal, cur))}
+            {t.taxRate > 0 && row("Tax (" + t.taxRate + "%)", money(t.taxTotal, cur))}
             <div style={{ height: 1, background: "#e8ecf3", margin: "4px 0" }} />
             {row("Total", money(t.total, cur), true, page.primary)}
             {t.paid > 0 && row("Paid", "−" + money(t.paid, cur), false, "#1f9d63")}

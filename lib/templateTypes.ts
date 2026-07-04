@@ -24,7 +24,7 @@ export type BlockType =
 
 /** Which invoice-line field a product-table column shows. "custom" = a free
  * per-line value entered on the invoice. */
-export type ColField = "index" | "description" | "asin" | "qty" | "rate" | "discount" | "tax" | "amount" | "custom";
+export type ColField = "index" | "description" | "asin" | "qty" | "rate" | "discount" | "amount" | "custom";
 
 export const COL_FIELDS: { value: ColField; label: string }[] = [
   { value: "index", label: "# (row no.)" },
@@ -33,7 +33,6 @@ export const COL_FIELDS: { value: ColField; label: string }[] = [
   { value: "qty", label: "Qty" },
   { value: "rate", label: "Unit Price" },
   { value: "discount", label: "Discount %" },
-  { value: "tax", label: "Tax %" },
   { value: "amount", label: "Line Amount" },
   { value: "custom", label: "Custom (free text)" },
 ];
@@ -138,7 +137,6 @@ export function makeBlock(type: BlockType): Block {
         { label: "Qty", field: "qty", align: "right", flex: 0.6, sample: "2" },
         { label: "Rate", field: "rate", align: "right", flex: 0.9, sample: "E£ 100.00" },
         { label: "Disc", field: "discount", align: "right", flex: 0.6, sample: "0%" },
-        { label: "Tax", field: "tax", align: "right", flex: 0.6, sample: "15%" },
         { label: "Amount", field: "amount", align: "right", flex: 1, sample: "E£ 230.00" },
       ];
       const cols: Column[] = std.map((c) => ({ id: uid("c"), label: c.label, align: c.align, flex: c.flex, field: c.field }));

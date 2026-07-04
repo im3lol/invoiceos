@@ -7,7 +7,7 @@ import InvoiceWizard from "./InvoiceWizard";
 import InvoicePaper from "./InvoicePaper";
 import type { Customer, Invoice, InvoiceStatus, Product, Supplier } from "@/lib/domain";
 import { genId } from "@/lib/domain";
-import { money, compTotals, CURRENCIES } from "@/lib/calc";
+import { money, compTotals, CURRENCIES, taxOf } from "@/lib/calc";
 import { listEntities, saveEntity, deleteEntity } from "@/lib/entitiesApi";
 import { listInvoices, saveInvoice, deleteInvoice } from "@/lib/invoicesApi";
 import { listTemplates } from "@/lib/templatesApi";
@@ -24,7 +24,7 @@ interface FormState {
   type: "supplier" | "customer" | "product" | null;
   id: string | null;
   title: string;
-  data: Record<string, string | number>;
+  data: Record<string, string | number | boolean>;
 }
 interface State {
   view: string;
@@ -122,12 +122,12 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
     const arr = this.state[ENTITY_MAP[type]] as Array<{ id: string }>;
     const existing = id ? arr.find((x) => x.id === id) : null;
     const blank: Record<string, Record<string, string>> = {
-      supplier: { name: "", legal: "", taxId: "", email: "", phone: "", addr: "", website: "", logoText: "" },
+      supplier: { name: "", legal: "", taxId: "", email: "", phone: "", addr: "", website: "", logoText: "", taxRate: "" },
       customer: { store: "", contact: "", email: "", phone: "", billing: "", shipping: "", track: "" },
-      product: { title: "", asin: "", sku: "", unitPrice: "", taxPct: "", discountPct: "" },
+      product: { title: "", asin: "", sku: "", unitPrice: "", discountPct: "" },
     };
     const titles = { supplier: id ? "Edit Company" : "Add Company", customer: id ? "Edit Customer" : "Add Customer", product: id ? "Edit Product" : "Add Product" };
-    this.setState({ form: { open: true, type, id: id || null, title: titles[type], data: existing ? { ...(existing as Record<string, string | number>) } : { ...blank[type] } } });
+    this.setState({ form: { open: true, type, id: id || null, title: titles[type], data: existing ? { ...(existing as Record<string, string | number | boolean>) } : { ...blank[type] } } });
   };
   closeForm = () => this.setState({ form: { ...this.state.form, open: false } });
   onFormInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,16 +157,20 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
     reader.readAsDataURL(file);
   };
   clearLogo = () => this.setState({ form: { ...this.state.form, data: { ...this.state.form.data, logoImage: "" } } });
+  toggleTax = (e: React.ChangeEvent<HTMLInputElement>) => this.setState({ form: { ...this.state.form, data: { ...this.state.form.data, taxEnabled: e.target.checked } } });
   saveForm = async () => {
     const { type, id, data } = this.state.form;
     if (!type) return;
-    const rec: Record<string, string | number> = { ...data, id: id || genId(type[0]) };
+    const rec: Record<string, string | number | boolean> = { ...data, id: id || genId(type[0]) };
     if (type === "product") {
       rec.unitPrice = +rec.unitPrice || 0;
-      rec.taxPct = +rec.taxPct || 0;
       rec.discountPct = +rec.discountPct || 0;
     }
-    if (type === "supplier" && !rec.logoText) rec.logoText = String(rec.name || "?").slice(0, 2).toUpperCase();
+    if (type === "supplier") {
+      if (!rec.logoText) rec.logoText = String(rec.name || "?").slice(0, 2).toUpperCase();
+      rec.taxEnabled = !!rec.taxEnabled;
+      rec.taxRate = +rec.taxRate || 0;
+    }
     const kind = ENTITY_MAP[type];
     try {
       const saved = await saveEntity(kind, rec);
@@ -260,7 +264,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
       customers: ["Customers", "Amazon buyer directory"],
       products: ["Products", "ASIN / SKU catalog"],
     };
-    const totals = st.invoices.map((i) => ({ inv: i, t: compTotals(i.lines, i.amountPaid) }));
+    const totals = st.invoices.map((i) => ({ inv: i, t: compTotals(i.lines, i.amountPaid, taxOf(i)) }));
     const sales = totals.reduce((a, x) => a + x.t.total, 0);
     const collected = totals.filter((x) => x.inv.status === "Paid").reduce((a, x) => a + x.t.total, 0);
     const outstanding = totals.filter((x) => x.inv.status !== "Paid").reduce((a, x) => a + x.t.total, 0);
@@ -435,6 +439,17 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
                   {st.form.data.logoImage ? <button onClick={this.clearLogo} style={css("border:1px solid #f6dfe0; background:#fff; color:#d64545; font-weight:700; font-size:12px; padding:8px 10px; border-radius:8px; cursor:pointer;")}>Remove</button> : null}
                 </div>
               )}
+              {st.form.type === "supplier" && (
+                <div style={css("display:flex; align-items:center; gap:12px; margin-bottom:14px; padding:12px; background:#f7faff; border:1px solid #e7edf9; border-radius:12px;")}>
+                  <label style={css("display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:800; cursor:pointer;")}>
+                    <input type="checkbox" checked={!!st.form.data.taxEnabled} onChange={this.toggleTax} style={{ accentColor: "#2f6bed", width: 16, height: 16 }} />
+                    Charge tax on invoices
+                  </label>
+                  <div style={css("flex:1;")} />
+                  <input name="taxRate" value={st.form.data.taxRate != null ? String(st.form.data.taxRate) : ""} onChange={this.onFormInput} disabled={!st.form.data.taxEnabled} placeholder="14" style={{ width: 64, padding: "9px 10px", border: "1px solid #e2e8f5", borderRadius: 9, fontSize: 13, fontWeight: 700, textAlign: "right", opacity: st.form.data.taxEnabled ? 1 : 0.5 }} />
+                  <span style={css("font-size:13px; font-weight:800; color:#9aa3b5;")}>%</span>
+                </div>
+              )}
               <div style={css("display:grid; grid-template-columns:1fr 1fr; gap:13px;")}>
                 {formFields.map((f) => (
                   <div key={f.key} style={css(`grid-column:${f.span};`)}>
@@ -553,7 +568,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
                     <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; font-size:13px;")}>{inv.customer?.store || "—"}</td>
                     <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; font-size:13px; color:#7c8598;")}>{inv.date}</td>
                     <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb;")}><span style={css(`font-size:11px; font-weight:700; padding:4px 9px; border-radius:20px; background:${c.bg}; color:${c.fg};`)}>{inv.status}</span></td>
-                    <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-weight:800; font-size:13px; font-family:'Space Grotesk';")}>{money(compTotals(inv.lines, inv.amountPaid).total, cur)}</td>
+                    <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-weight:800; font-size:13px; font-family:'Space Grotesk';")}>{money(compTotals(inv.lines, inv.amountPaid, taxOf(inv)).total, cur)}</td>
                     <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right;")}><button onClick={() => this.editInvoice(inv)} style={css("border:1px solid #e2e8f5; background:#fff; color:#2f6bed; font-weight:700; font-size:11.5px; padding:5px 11px; border-radius:7px; cursor:pointer;")}>Open</button></td>
                   </tr>
                 );
@@ -634,7 +649,6 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
               <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7;")}>PRODUCT TITLE</th>
               <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7;")}>BARCODE / SKU</th>
               <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7; text-align:right;")}>UNIT PRICE</th>
-              <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7; text-align:right;")}>TAX %</th>
               <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7; text-align:right;")}>DISC %</th>
               <th style={css("border-bottom:1px solid #eef1f7;")}></th>
             </tr></thead>
@@ -644,7 +658,6 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; font-weight:700; font-size:13px;")}>{p.title}</td>
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; font-size:12.5px;")}><span style={css("font-family:'Space Grotesk'; font-weight:600; color:#2f6bed;")}>{p.asin}</span> <span style={css("color:#9aa3b5;")}>/ {p.sku}</span></td>
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-weight:800; font-size:13px; font-family:'Space Grotesk';")}>{money(p.unitPrice, cur)}</td>
-                  <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-size:13px;")}>{p.taxPct}%</td>
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-size:13px;")}>{p.discountPct}%</td>
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right;")}>
                     <button onClick={() => this.openForm("product", p.id)} style={css("border:1px solid #e2e8f5; background:#fff; color:#5b6478; font-weight:700; font-size:11.5px; padding:5px 10px; border-radius:7px; cursor:pointer; margin-right:5px;")}>Edit</button>
@@ -663,7 +676,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
     const fieldDefs: Record<string, Array<[string, string, string, string]>> = {
       supplier: [["name", "Company Name", "2", "Zylker Dezigns"], ["legal", "Legal Name", "2", "Zylker Dezigns LLC"], ["taxId", "Tax ID / TRN", "1", "TRN 300..."], ["phone", "Phone", "1", "+1 ..."], ["email", "Email", "1", "billing@..."], ["website", "Website", "2", "www.company.com"], ["addr", "Address", "2", "P.O. Box ..."]],
       customer: [["store", "Amazon Store Name", "2", "Shepard Corp"], ["contact", "Contact Name", "1", "John Smith"], ["phone", "Phone", "1", "+1 ..."], ["email", "Email", "2", "buyer@..."], ["billing", "Billing Address", "2", "Street, City"], ["shipping", "Shipping Address", "2", "Street, City"], ["track", "Tracking #", "2", "RO..."]],
-      product: [["title", "Product Title", "2", "Wireless Earbuds Pro"], ["asin", "Barcode / UPC", "1", "0123456789012"], ["sku", "SKU / Model", "1", "WEP-001"], ["unitPrice", "Unit Price", "1", "79.99"], ["taxPct", "Default Tax %", "1", "8.25"], ["discountPct", "Default Disc %", "1", "0"]],
+      product: [["title", "Product Title", "2", "Wireless Earbuds Pro"], ["asin", "Barcode / UPC", "1", "0123456789012"], ["sku", "SKU / Model", "1", "WEP-001"], ["unitPrice", "Unit Price", "1", "79.99"], ["discountPct", "Default Disc %", "1", "0"]],
     };
     const ft = this.state.form.type;
     if (!ft) return [];

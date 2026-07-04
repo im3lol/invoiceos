@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { compTotals } from "./calc";
+import { compTotals, taxOf } from "./calc";
 import type { Invoice } from "./domain";
 
 /* Invoice persistence. Filterable fields live in columns; the full render-ready
@@ -8,7 +8,7 @@ import type { Invoice } from "./domain";
 const mem: Invoice[] = [];
 
 function toRow(inv: Invoice) {
-  const t = compTotals(inv.lines, inv.amountPaid);
+  const t = compTotals(inv.lines, inv.amountPaid, taxOf(inv));
   return {
     id: inv.id,
     number: inv.number,
