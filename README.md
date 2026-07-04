@@ -22,6 +22,8 @@ component, then grown into a full invoice system with a WYSIWYG template builder
   (auto‑resized) and a website, both shown on invoices.
 - **Currency** — EGP (default), USD, SAR, EUR.
 - **Print / PDF** — print any invoice (only the invoice paper prints, sized to A4).
+- **Accounts** — email + password sign‑in (Supabase Auth). Each account's data is fully
+  isolated by per‑user row‑level security; a fresh account is seeded with demo data.
 
 Everything (companies, customers, products, templates, invoices) persists to Supabase, with a
 localStorage fallback when Supabase isn't configured.
@@ -49,7 +51,9 @@ The app expects these tables (see the app's migrations / `lib/*Api.ts`):
 | `invoice_templates` | `id uuid`, `name`, `doc jsonb`, `published`, timestamps |
 | `invoices` | filterable columns (`number`, `status`, `total`, …) + full `doc jsonb` snapshot |
 
-RLS is enabled with anon‑open policies for the demo (no auth yet).
+Every table has a `user_id` column and RLS policies restricting rows to
+`user_id = auth.uid()`, so accounts are isolated. New signups are auto‑confirmed by a DB
+trigger for demo convenience — remove that trigger and enable "Confirm email" for production.
 
 ## Project structure
 
@@ -71,6 +75,6 @@ RLS is enabled with anon‑open policies for the demo (no auth yet).
 
 ## Notes
 
-- The bundled `.env.example` uses **publishable** Supabase keys with anon‑open RLS — convenient
-  for trying the app, not for production. Use your own project and add auth + per‑user RLS
-  before deploying for real.
+- The bundled `.env.example` uses **publishable** Supabase keys — convenient for trying the
+  app. For production, use your own project, remove the auto‑confirm trigger, and turn on
+  email confirmation.

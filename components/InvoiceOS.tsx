@@ -9,10 +9,15 @@ import type { Customer, Invoice, InvoiceStatus, Product, Supplier } from "@/lib/
 import { genId } from "@/lib/domain";
 import { money, compTotals, CURRENCIES } from "@/lib/calc";
 import { listEntities, saveEntity, deleteEntity } from "@/lib/entitiesApi";
-import { listInvoices, saveInvoice, deleteInvoice, insertInvoices } from "@/lib/invoicesApi";
-import { listTemplates, saveTemplate, setPublished } from "@/lib/templatesApi";
-import { defaultTemplates, demoInvoices } from "@/lib/seed";
+import { listInvoices, saveInvoice, deleteInvoice } from "@/lib/invoicesApi";
+import { listTemplates } from "@/lib/templatesApi";
+import { seedDemoOnce } from "@/lib/seed";
 import type { TemplateRecord } from "@/lib/templateTypes";
+
+interface InvoiceOSProps {
+  userEmail?: string;
+  onSignOut?: () => void;
+}
 
 interface FormState {
   open: boolean;
@@ -58,8 +63,8 @@ const stColor = (s: string) => (s === "Paid" ? { bg: "#e5f6ec", fg: "#1f9d63" } 
 
 const ENTITY_MAP = { supplier: "suppliers", customer: "customers", product: "products" } as const;
 
-export default class InvoiceOS extends React.Component<Record<string, never>, State> {
-  constructor(props: Record<string, never>) {
+export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
+  constructor(props: InvoiceOSProps) {
     super(props);
     this.state = {
       view: "dashboard",
@@ -78,24 +83,16 @@ export default class InvoiceOS extends React.Component<Record<string, never>, St
 
   async componentDidMount() {
     try {
+      // Fresh account (no companies yet) → seed a demo dataset owned by this user.
+      const firstLook = await listEntities<Supplier>("suppliers");
+      if (firstLook.length === 0) await seedDemoOnce();
       const [suppliers, customers, products] = await Promise.all([
         listEntities<Supplier>("suppliers"),
         listEntities<Customer>("customers"),
         listEntities<Product>("products"),
       ]);
-      let templates = await listTemplates();
-      if (templates.length === 0) {
-        for (const doc of defaultTemplates()) {
-          const rec = await saveTemplate(doc.name, doc);
-          await setPublished(rec.id, true);
-        }
-        templates = await listTemplates();
-      }
-      let invoices = await listInvoices();
-      if (invoices.length === 0) {
-        await insertInvoices(demoInvoices(suppliers, customers, products, templates));
-        invoices = await listInvoices();
-      }
+      const templates = await listTemplates();
+      const invoices = await listInvoices();
       this.setState({ suppliers, customers, products, templates, invoices, loading: false });
     } catch (e) {
       console.error("load failed", e);
@@ -280,10 +277,13 @@ export default class InvoiceOS extends React.Component<Record<string, never>, St
           </nav>
           <div style={css("margin-top:auto; background:#f4f7fd; border:1px solid #e7edf9; border-radius:12px; padding:13px;")}>
             <div style={css("font-size:11.5px; color:#7c8598; font-weight:600; margin-bottom:8px;")}>Signed in as</div>
-            <div style={css("display:flex; align-items:center; gap:9px;")}>
-              <div style={css("width:28px; height:28px; border-radius:50%; background:#dfe7f8; color:#2f6bed; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px;")}>A</div>
-              <div style={css("font-size:12.5px; font-weight:700;")}>Amazon Seller</div>
+            <div style={css("display:flex; align-items:center; gap:9px; margin-bottom:10px;")}>
+              <div style={css("width:28px; height:28px; flex:0 0 28px; border-radius:50%; background:#dfe7f8; color:#2f6bed; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px;")}>{(this.props.userEmail || "A").charAt(0).toUpperCase()}</div>
+              <div style={css("font-size:12px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;")} title={this.props.userEmail || "Amazon Seller"}>{this.props.userEmail || "Amazon Seller"}</div>
             </div>
+            {this.props.onSignOut && (
+              <button onClick={this.props.onSignOut} style={css("width:100%; border:1px solid #e2e8f5; background:#fff; color:#d64545; font-weight:700; font-size:12px; padding:7px; border-radius:8px; cursor:pointer;")}>Sign out</button>
+            )}
           </div>
         </aside>
 
