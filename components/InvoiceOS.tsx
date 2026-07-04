@@ -38,6 +38,7 @@ interface State {
   form: FormState;
   editingInvoice: Invoice | null;
   previewInvoice: Invoice | null;
+  toast: { msg: string; kind: "err" | "ok" } | null;
 }
 
 // Parsed styles are cached by their source string — the same static style
@@ -78,7 +79,19 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
       form: { open: false, type: null, id: null, title: "", data: {} },
       editingInvoice: null,
       previewInvoice: null,
+      toast: null,
     };
+  }
+
+  toastTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Surface a transient message (errors especially) so writes never fail silently. */
+  notify = (msg: string, kind: "err" | "ok" = "err") => {
+    this.setState({ toast: { msg, kind } });
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => this.setState({ toast: null }), kind === "err" ? 6000 : 2500);
+  };
+  componentWillUnmount() {
+    if (this.toastTimer) clearTimeout(this.toastTimer);
   }
 
   async componentDidMount() {
@@ -97,6 +110,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
     } catch (e) {
       console.error("load failed", e);
       this.setState({ loading: false });
+      this.notify("Couldn't load your data — " + (e as Error).message);
     }
   }
 
@@ -154,46 +168,79 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
     }
     if (type === "supplier" && !rec.logoText) rec.logoText = String(rec.name || "?").slice(0, 2).toUpperCase();
     const kind = ENTITY_MAP[type];
-    const saved = await saveEntity(kind, rec);
-    const arr = this.state[kind] as Array<{ id: string }>;
-    const next = arr.some((x) => x.id === saved.id) ? arr.map((x) => (x.id === saved.id ? saved : x)) : [...arr, saved];
-    this.setState({ [kind]: next, form: { ...this.state.form, open: false } } as unknown as Pick<State, keyof State>);
+    try {
+      const saved = await saveEntity(kind, rec);
+      const arr = this.state[kind] as Array<{ id: string }>;
+      const next = arr.some((x) => x.id === saved.id) ? arr.map((x) => (x.id === saved.id ? saved : x)) : [...arr, saved];
+      this.setState({ [kind]: next, form: { ...this.state.form, open: false } } as unknown as Pick<State, keyof State>);
+      this.notify("Saved ✓", "ok");
+    } catch (e) {
+      this.notify("Save failed — " + (e as Error).message);
+    }
   };
   removeEntity = async (type: "supplier" | "customer" | "product", id: string) => {
     const kind = ENTITY_MAP[type];
-    await deleteEntity(kind, id);
-    this.setState({ [kind]: (this.state[kind] as Array<{ id: string }>).filter((x) => x.id !== id) } as unknown as Pick<State, keyof State>);
+    try {
+      await deleteEntity(kind, id);
+      this.setState({ [kind]: (this.state[kind] as Array<{ id: string }>).filter((x) => x.id !== id) } as unknown as Pick<State, keyof State>);
+    } catch (e) {
+      this.notify("Delete failed — " + (e as Error).message);
+    }
   };
   createEntityFromWizard = async (kind: "suppliers" | "customers", data: Record<string, string>) => {
     const rec: Record<string, string> = { ...data, id: genId(kind[0]) };
     if (kind === "suppliers" && !rec.logoText) rec.logoText = String(rec.name || "?").slice(0, 2).toUpperCase();
-    const saved = await saveEntity(kind, rec);
-    this.setState({ [kind]: [...(this.state[kind] as Array<{ id: string }>), saved] } as unknown as Pick<State, keyof State>);
-    return saved as { id: string };
+    try {
+      const saved = await saveEntity(kind, rec);
+      this.setState({ [kind]: [...(this.state[kind] as Array<{ id: string }>), saved] } as unknown as Pick<State, keyof State>);
+      return saved as { id: string };
+    } catch (e) {
+      this.notify("Could not create — " + (e as Error).message);
+      throw e;
+    }
   };
 
   /* ---------- invoice ops ---------- */
   newInvoice = () => this.setState({ view: "generator", editingInvoice: null });
   editInvoice = (inv: Invoice) => this.setState({ view: "generator", editingInvoice: inv });
   onInvoiceSaved = async (inv: Invoice) => {
-    const saved = await saveInvoice(inv);
-    const arr = this.state.invoices;
-    const next = arr.some((x) => x.id === saved.id) ? arr.map((x) => (x.id === saved.id ? saved : x)) : [saved, ...arr];
-    this.setState({ invoices: next, view: "invoices", editingInvoice: null });
+    try {
+      const saved = await saveInvoice(inv);
+      const arr = this.state.invoices;
+      const next = arr.some((x) => x.id === saved.id) ? arr.map((x) => (x.id === saved.id ? saved : x)) : [saved, ...arr];
+      this.setState({ invoices: next, view: "invoices", editingInvoice: null });
+      this.notify("Invoice saved ✓", "ok");
+    } catch (e) {
+      // Keep the wizard open (view unchanged) so the user can retry.
+      this.notify("Invoice not saved — " + (e as Error).message);
+    }
   };
   onDeleteInvoice = async (inv: Invoice) => {
-    await deleteInvoice(inv.id);
-    this.setState({ invoices: this.state.invoices.filter((x) => x.id !== inv.id) });
+    try {
+      await deleteInvoice(inv.id);
+      this.setState({ invoices: this.state.invoices.filter((x) => x.id !== inv.id) });
+    } catch (e) {
+      this.notify("Delete failed — " + (e as Error).message);
+    }
   };
   onDuplicateInvoice = async (inv: Invoice) => {
     const copy: Invoice = { ...inv, id: genId("i"), number: inv.number + "-COPY", status: "Pending", lines: inv.lines.map((l) => ({ ...l })) };
-    const saved = await saveInvoice(copy);
-    this.setState({ invoices: [saved, ...this.state.invoices] });
+    try {
+      const saved = await saveInvoice(copy);
+      this.setState({ invoices: [saved, ...this.state.invoices] });
+      this.notify("Invoice duplicated ✓", "ok");
+    } catch (e) {
+      this.notify("Duplicate failed — " + (e as Error).message);
+    }
   };
   onStatusChange = async (inv: Invoice, status: InvoiceStatus) => {
     const updated = { ...inv, status };
-    const saved = await saveInvoice(updated);
-    this.setState({ invoices: this.state.invoices.map((x) => (x.id === saved.id ? saved : x)) });
+    try {
+      const saved = await saveInvoice(updated);
+      this.setState({ invoices: this.state.invoices.map((x) => (x.id === saved.id ? saved : x)) });
+    } catch (e) {
+      this.notify("Status update failed — " + (e as Error).message);
+    }
   };
 
   /* ---------- dashboard derived ---------- */
@@ -255,6 +302,22 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
 
     return (
       <div className="app-shell" style={css("display:flex; height:100vh; width:100%; overflow:hidden; background:#eaf0fb;")}>
+        {/* Toast — surfaces save/load failures so nothing fails silently */}
+        {st.toast && (
+          <div
+            className="no-print"
+            onClick={() => this.setState({ toast: null })}
+            style={{
+              position: "fixed", bottom: 22, left: "50%", transform: "translateX(-50%)", zIndex: 200,
+              maxWidth: 460, padding: "12px 18px", borderRadius: 11, cursor: "pointer",
+              fontSize: 13, fontWeight: 700, color: "#fff",
+              background: st.toast.kind === "err" ? "#d64545" : "#1f9d63",
+              boxShadow: "0 12px 34px rgba(20,30,60,.28)", animation: "fadein .2s ease",
+            }}
+          >
+            {st.toast.msg}
+          </div>
+        )}
         {/* Sidebar */}
         <aside className="no-print" style={css("width:236px; flex:0 0 236px; background:#ffffff; border-right:1px solid #eef1f7; display:flex; flex-direction:column; padding:22px 16px;")}>
           <div style={css("display:flex; align-items:center; gap:11px; padding:4px 8px 22px;")}>
