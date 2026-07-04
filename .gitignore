@@ -1,0 +1,14 @@
+/node_modules
+/.next
+/out
+/build
+*.log
+.DS_Store
+.env*.local
+
+# design source (kept locally for reference)
+/InvoiceOS.html
+/design-source
+
+# TS build info
+*.tsbuildinfo
