@@ -574,7 +574,11 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
             <div key={s.id} style={css("background:#fff; border-radius:16px; padding:20px; border:1px solid #eef1f7;")}>
               <div style={css("display:flex; justify-content:space-between; align-items:flex-start;")}>
                 <div style={css("display:flex; gap:13px; align-items:center;")}>
-                  <div style={css("width:44px; height:44px; border-radius:11px; background:#eef3fd; color:#2f6bed; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px;")}>{s.logoText}</div>
+                  {s.logoImage ? (
+                    <img src={s.logoImage} alt={s.name} style={css("width:44px; height:44px; border-radius:11px; object-fit:contain; background:#fff; border:1px solid #eef1f7;")} />
+                  ) : (
+                    <div style={css("width:44px; height:44px; border-radius:11px; background:#eef3fd; color:#2f6bed; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px;")}>{s.logoText}</div>
+                  )}
                   <div><div style={css("font-weight:800; font-size:15px;")}>{s.name}</div><div style={css("font-size:12px; color:#9aa3b5; font-weight:600;")}>{s.legal}</div></div>
                 </div>
                 <div style={css("display:flex; gap:6px;")}>
@@ -657,7 +661,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
 
   formFields() {
     const fieldDefs: Record<string, Array<[string, string, string, string]>> = {
-      supplier: [["name", "Company Name", "2", "Zylker Dezigns"], ["legal", "Legal Name", "2", "Zylker Dezigns LLC"], ["taxId", "Tax ID / TRN", "1", "TRN 300..."], ["phone", "Phone", "1", "+1 ..."], ["email", "Email", "1", "billing@..."], ["website", "Website", "2", "www.company.com"], ["addr", "Address", "2", "P.O. Box ..."], ["logoText", "Logo Initials", "1", "ZD"]],
+      supplier: [["name", "Company Name", "2", "Zylker Dezigns"], ["legal", "Legal Name", "2", "Zylker Dezigns LLC"], ["taxId", "Tax ID / TRN", "1", "TRN 300..."], ["phone", "Phone", "1", "+1 ..."], ["email", "Email", "1", "billing@..."], ["website", "Website", "2", "www.company.com"], ["addr", "Address", "2", "P.O. Box ..."]],
       customer: [["store", "Amazon Store Name", "2", "Shepard Corp"], ["contact", "Contact Name", "1", "John Smith"], ["phone", "Phone", "1", "+1 ..."], ["email", "Email", "2", "buyer@..."], ["billing", "Billing Address", "2", "Street, City"], ["shipping", "Shipping Address", "2", "Street, City"], ["track", "Tracking #", "2", "RO..."]],
       product: [["title", "Product Title", "2", "Wireless Earbuds Pro"], ["asin", "Barcode / UPC", "1", "0123456789012"], ["sku", "SKU / Model", "1", "WEP-001"], ["unitPrice", "Unit Price", "1", "79.99"], ["taxPct", "Default Tax %", "1", "8.25"], ["discountPct", "Default Disc %", "1", "0"]],
     };
