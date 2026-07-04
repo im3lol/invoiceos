@@ -17,6 +17,7 @@ const STD_COLS: RenderCol[] = [
   { id: "s-qty", label: "Qty", field: "qty", align: "right", flex: 0.6 },
   { id: "s-rate", label: "Rate", field: "rate", align: "right", flex: 0.9 },
   { id: "s-disc", label: "Disc", field: "discount", align: "right", flex: 0.6 },
+  { id: "s-tax", label: "Tax", field: "tax", align: "right", flex: 0.6 },
   { id: "s-amt", label: "Amount", field: "amount", align: "right", flex: 1 },
 ];
 
@@ -28,6 +29,7 @@ function cellValue(col: RenderCol, l: InvoiceLine, i: number, cur: string): Reac
     case "qty": return l.qty;
     case "rate": return money(+l.unitPrice, cur);
     case "discount": return (+l.discountPct || 0) + "%";
+    case "tax": return (+l.taxPct || 0) + "%";
     case "amount": return money(compLine(l).total, cur);
     case "custom": return (l.custom && l.custom[col.id]) || "";
     default: return "";
@@ -129,8 +131,7 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
       );
     case "productTable": {
       const raw = (p.columns as Column[]) || [];
-      // Tax was removed from the system — drop any legacy tax column in old snapshots.
-      const bound = raw.filter((c) => !c.hidden && c.field && (c.field as string) !== "tax").map((c) => ({ id: c.id, label: c.label, field: c.field as ColField, align: c.align, flex: c.flex }));
+      const bound = raw.filter((c) => !c.hidden && c.field).map((c) => ({ id: c.id, label: c.label, field: c.field as ColField, align: c.align, flex: c.flex }));
       const cols: RenderCol[] = bound.length ? bound : STD_COLS;
       const gt = cols.map((c) => c.flex + "fr").join(" ");
       return (
@@ -174,6 +175,7 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
           <div style={{ width: 270 }}>
             {row("Subtotal", money(t.subtotal, cur))}
             {row("Discount", "−" + money(t.discount, cur), false, "#d64545")}
+            {row("Tax", money(t.taxTotal, cur))}
             <div style={{ height: 1, background: "#e8ecf3", margin: "4px 0" }} />
             {row("Total", money(t.total, cur), true, page.primary)}
             {t.paid > 0 && row("Paid", "−" + money(t.paid, cur), false, "#1f9d63")}

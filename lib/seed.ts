@@ -33,13 +33,13 @@ const DEMO_CUSTOMERS: Omit<Customer, "id">[] = [
   { store: "Yesenia Retail", contact: "Yesenia M. Lawrence", email: "yesenia@youraddress.com", phone: "+1 555 987 123", billing: "3647 Confederate Drive, Syracuse, NY 13221", shipping: "3647 Confederate Drive, Syracuse, NY 13221", track: "RO99887766" },
 ];
 const DEMO_PRODUCTS: Omit<Product, "id">[] = [
-  { title: "Wireless Earbuds Pro", asin: "B09ABC1234", sku: "WEP-001", unitPrice: 79.99, discountPct: 0 },
-  { title: "4K Action Camera", asin: "B08DEF5678", sku: "ACM-4K", unitPrice: 129.0, discountPct: 5 },
-  { title: "Stainless Steel Water Bottle", asin: "B07GHI9012", sku: "SWB-32", unitPrice: 24.5, discountPct: 0 },
-  { title: "LED Desk Lamp", asin: "B08JKL3456", sku: "LDL-10", unitPrice: 39.99, discountPct: 10 },
-  { title: "Bluetooth Speaker Mini", asin: "B09MNO7890", sku: "BSM-05", unitPrice: 45.0, discountPct: 0 },
-  { title: "ToasterMaster Toaster", asin: "B07TST0432", sku: "BHT432", unitPrice: 50.0, discountPct: 2 },
-  { title: "QuickHeat Pro Microwave", asin: "B08MWA0789", sku: "A789", unitPrice: 150.0, discountPct: 10 },
+  { title: "Wireless Earbuds Pro", asin: "B09ABC1234", sku: "WEP-001", unitPrice: 79.99, taxPct: 8.25, discountPct: 0 },
+  { title: "4K Action Camera", asin: "B08DEF5678", sku: "ACM-4K", unitPrice: 129.0, taxPct: 8.25, discountPct: 5 },
+  { title: "Stainless Steel Water Bottle", asin: "B07GHI9012", sku: "SWB-32", unitPrice: 24.5, taxPct: 5, discountPct: 0 },
+  { title: "LED Desk Lamp", asin: "B08JKL3456", sku: "LDL-10", unitPrice: 39.99, taxPct: 8.25, discountPct: 10 },
+  { title: "Bluetooth Speaker Mini", asin: "B09MNO7890", sku: "BSM-05", unitPrice: 45.0, taxPct: 8.25, discountPct: 0 },
+  { title: "ToasterMaster Toaster", asin: "B07TST0432", sku: "BHT432", unitPrice: 50.0, taxPct: 0, discountPct: 2 },
+  { title: "QuickHeat Pro Microwave", asin: "B08MWA0789", sku: "A789", unitPrice: 150.0, taxPct: 0, discountPct: 10 },
 ];
 // [number, status, date, dueDate, amountPaid, supplierIdx, customerIdx, templateIdx, lines:[[productIdx, qty]]]
 const DEMO_INVOICES: Array<{ number: string; status: Invoice["status"]; date: string; dueDate: string; paid: number; s: number; c: number; t: number; lines: [number, number][] }> = [
@@ -61,7 +61,7 @@ function buildDemoInvoices(sups: Supplier[], cuss: Customer[], prds: Product[], 
     const tpl = tpls[d.t % tpls.length];
     const lines: InvoiceLine[] = d.lines.map(([pi, qty]) => {
       const p = prds[pi];
-      return { productId: p.id, description: p.title, asin: p.asin, qty, unitPrice: p.unitPrice, discountPct: p.discountPct };
+      return { productId: p.id, description: p.title, asin: p.asin, qty, unitPrice: p.unitPrice, discountPct: p.discountPct, taxPct: p.taxPct };
     });
     const inv: Invoice = {
       id: genId("i"),

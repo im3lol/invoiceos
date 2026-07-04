@@ -124,7 +124,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
     const blank: Record<string, Record<string, string>> = {
       supplier: { name: "", legal: "", taxId: "", email: "", phone: "", addr: "", website: "", logoText: "" },
       customer: { store: "", contact: "", email: "", phone: "", billing: "", shipping: "", track: "" },
-      product: { title: "", asin: "", sku: "", unitPrice: "", discountPct: "" },
+      product: { title: "", asin: "", sku: "", unitPrice: "", taxPct: "", discountPct: "" },
     };
     const titles = { supplier: id ? "Edit Company" : "Add Company", customer: id ? "Edit Customer" : "Add Customer", product: id ? "Edit Product" : "Add Product" };
     this.setState({ form: { open: true, type, id: id || null, title: titles[type], data: existing ? { ...(existing as Record<string, string | number>) } : { ...blank[type] } } });
@@ -163,6 +163,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
     const rec: Record<string, string | number> = { ...data, id: id || genId(type[0]) };
     if (type === "product") {
       rec.unitPrice = +rec.unitPrice || 0;
+      rec.taxPct = +rec.taxPct || 0;
       rec.discountPct = +rec.discountPct || 0;
     }
     if (type === "supplier" && !rec.logoText) rec.logoText = String(rec.name || "?").slice(0, 2).toUpperCase();
@@ -633,6 +634,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
               <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7;")}>PRODUCT TITLE</th>
               <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7;")}>BARCODE / SKU</th>
               <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7; text-align:right;")}>UNIT PRICE</th>
+              <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7; text-align:right;")}>TAX %</th>
               <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7; text-align:right;")}>DISC %</th>
               <th style={css("border-bottom:1px solid #eef1f7;")}></th>
             </tr></thead>
@@ -642,6 +644,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; font-weight:700; font-size:13px;")}>{p.title}</td>
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; font-size:12.5px;")}><span style={css("font-family:'Space Grotesk'; font-weight:600; color:#2f6bed;")}>{p.asin}</span> <span style={css("color:#9aa3b5;")}>/ {p.sku}</span></td>
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-weight:800; font-size:13px; font-family:'Space Grotesk';")}>{money(p.unitPrice, cur)}</td>
+                  <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-size:13px;")}>{p.taxPct}%</td>
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-size:13px;")}>{p.discountPct}%</td>
                   <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right;")}>
                     <button onClick={() => this.openForm("product", p.id)} style={css("border:1px solid #e2e8f5; background:#fff; color:#5b6478; font-weight:700; font-size:11.5px; padding:5px 10px; border-radius:7px; cursor:pointer; margin-right:5px;")}>Edit</button>
@@ -660,7 +663,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
     const fieldDefs: Record<string, Array<[string, string, string, string]>> = {
       supplier: [["name", "Company Name", "2", "Zylker Dezigns"], ["legal", "Legal Name", "2", "Zylker Dezigns LLC"], ["taxId", "Tax ID / TRN", "1", "TRN 300..."], ["phone", "Phone", "1", "+1 ..."], ["email", "Email", "1", "billing@..."], ["website", "Website", "2", "www.company.com"], ["addr", "Address", "2", "P.O. Box ..."]],
       customer: [["store", "Amazon Store Name", "2", "Shepard Corp"], ["contact", "Contact Name", "1", "John Smith"], ["phone", "Phone", "1", "+1 ..."], ["email", "Email", "2", "buyer@..."], ["billing", "Billing Address", "2", "Street, City"], ["shipping", "Shipping Address", "2", "Street, City"], ["track", "Tracking #", "2", "RO..."]],
-      product: [["title", "Product Title", "2", "Wireless Earbuds Pro"], ["asin", "Barcode / UPC", "1", "0123456789012"], ["sku", "SKU / Model", "1", "WEP-001"], ["unitPrice", "Unit Price", "1", "79.99"], ["discountPct", "Default Disc %", "1", "0"]],
+      product: [["title", "Product Title", "2", "Wireless Earbuds Pro"], ["asin", "Barcode / UPC", "1", "0123456789012"], ["sku", "SKU / Model", "1", "WEP-001"], ["unitPrice", "Unit Price", "1", "79.99"], ["taxPct", "Default Tax %", "1", "8.25"], ["discountPct", "Default Disc %", "1", "0"]],
     };
     const ft = this.state.form.type;
     if (!ft) return [];

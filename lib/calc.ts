@@ -22,20 +22,25 @@ export function compLine(l: InvoiceLine) {
   const price = +l.unitPrice || 0;
   const qty = +l.qty || 0;
   const disc = +l.discountPct || 0;
+  const tax = +l.taxPct || 0;
   const net = price * qty;
   const dAmt = (net * disc) / 100;
-  return { net, dAmt, total: net - dAmt };
+  const taxable = net - dAmt;
+  const tAmt = (taxable * tax) / 100;
+  return { net, dAmt, taxable, tAmt, total: taxable + tAmt };
 }
 
 export function compTotals(lines: InvoiceLine[], amountPaid = 0) {
   let subtotal = 0,
-    discount = 0;
+    discount = 0,
+    taxTotal = 0;
   (lines || []).forEach((l) => {
     const c = compLine(l);
     subtotal += c.net;
     discount += c.dAmt;
+    taxTotal += c.tAmt;
   });
-  const total = subtotal - discount;
+  const total = subtotal - discount + taxTotal;
   const paid = +amountPaid || 0;
-  return { subtotal, discount, total, paid, balance: total - paid };
+  return { subtotal, discount, taxTotal, total, paid, balance: total - paid };
 }

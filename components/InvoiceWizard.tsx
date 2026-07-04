@@ -118,12 +118,12 @@ export default function InvoiceWizard({
       const lines = [...d.lines];
       const ex = lines.findIndex((l) => l.productId === pid);
       if (ex >= 0) lines[ex] = { ...lines[ex], qty: (+lines[ex].qty || 0) + 1 };
-      else lines.push({ productId: p.id, description: p.title, asin: p.asin, qty: 1, unitPrice: p.unitPrice, discountPct: p.discountPct });
+      else lines.push({ productId: p.id, description: p.title, asin: p.asin, qty: 1, unitPrice: p.unitPrice, discountPct: p.discountPct, taxPct: p.taxPct });
       return { ...d, lines };
     });
     setProductQuery("");
   };
-  const addBlank = () => setDraft((d) => ({ ...d, lines: [...d.lines, { productId: "", description: "", asin: "—", qty: 1, unitPrice: 0, discountPct: 0 }] }));
+  const addBlank = () => setDraft((d) => ({ ...d, lines: [...d.lines, { productId: "", description: "", asin: "—", qty: 1, unitPrice: 0, discountPct: 0, taxPct: 0 }] }));
   const patchLine = (i: number, patch: Partial<InvoiceLine>) => setDraft((d) => ({ ...d, lines: d.lines.map((l, idx) => (idx === i ? { ...l, ...patch } : l)) }));
   const removeLine = (i: number) => setDraft((d) => ({ ...d, lines: d.lines.filter((_, idx) => idx !== i) }));
 
@@ -261,10 +261,11 @@ export default function InvoiceWizard({
                       <input value={l.description} onChange={(e) => patchLine(i, { description: e.target.value })} placeholder="Item description" style={{ ...inp, flex: 1, fontWeight: 700 }} />
                       <button onClick={() => removeLine(i)} style={{ border: "none", background: "#f6ecec", color: "#d64545", fontWeight: 800, width: 28, height: 28, borderRadius: 7, cursor: "pointer" }}>×</button>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 6, alignItems: "end" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 6, alignItems: "end" }}>
                       <Mini label="QTY"><input value={String(l.qty)} onChange={(e) => patchLine(i, { qty: e.target.value })} style={miniInp} /></Mini>
                       <Mini label="PRICE"><input value={String(l.unitPrice)} onChange={(e) => patchLine(i, { unitPrice: e.target.value })} style={miniInp} /></Mini>
                       <Mini label="DISC%"><input value={String(l.discountPct)} onChange={(e) => patchLine(i, { discountPct: e.target.value })} style={miniInp} /></Mini>
+                      <Mini label="TAX%"><input value={String(l.taxPct)} onChange={(e) => patchLine(i, { taxPct: e.target.value })} style={miniInp} /></Mini>
                       <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 800, fontFamily: "'Space Grotesk'", minWidth: 84 }}>{money(compLine(l).total, draft.currency)}</div>
                     </div>
                     {customCols.length > 0 && (
@@ -302,6 +303,7 @@ export default function InvoiceWizard({
             <div style={card}>
               <Row k="Subtotal" v={money(totals.subtotal, draft.currency)} />
               <Row k="Discount" v={"−" + money(totals.discount, draft.currency)} c="#d64545" />
+              <Row k="Tax" v={money(totals.taxTotal, draft.currency)} />
               <div style={{ height: 1, background: "#eef1f7", margin: "6px 0" }} />
               <Row k="Total" v={money(totals.total, draft.currency)} strong />
             </div>
