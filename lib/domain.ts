@@ -30,7 +30,6 @@ export interface Product {
   asin: string;
   sku: string;
   unitPrice: number;
-  taxPct: number;
   discountPct: number;
 }
 export interface InvoiceLine {
@@ -40,7 +39,6 @@ export interface InvoiceLine {
   qty: number | string;
   unitPrice: number | string;
   discountPct: number | string;
-  taxPct: number | string;
   custom?: Record<string, string>; // values for template custom columns, keyed by column id
 }
 export type InvoiceStatus = "Paid" | "Pending" | "Overdue";

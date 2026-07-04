@@ -824,7 +824,7 @@ function PreviewBlock({ block, page }: { block: Block; page: TemplateDoc["page"]
         </div>
       );
     case "productTable": {
-      const cols = ((p.columns as Column[]) || []).filter((c) => !c.hidden);
+      const cols = ((p.columns as Column[]) || []).filter((c) => !c.hidden && (c.field as string) !== "tax");
       const rows = (p.rows as TableRow[]) || [];
       const gt = cols.map((c) => c.flex + "fr").join(" ");
       return (
