@@ -3,6 +3,7 @@
 import React from "react";
 import TemplateBuilder from "./TemplateBuilder";
 import InvoicesView from "./InvoicesView";
+import ProductsView from "./ProductsView";
 import InvoiceWizard from "./InvoiceWizard";
 import InvoicePaper from "./InvoicePaper";
 import type { Customer, Invoice, InvoiceStatus, Product, Supplier } from "@/lib/domain";
@@ -639,36 +640,14 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
   }
 
   renderProducts() {
-    const cur = this.state.currency;
     return (
-      <div style={css("animation:fadein .3s ease;")}>
-        <div style={css("display:flex; justify-content:flex-end; margin-bottom:14px;")}><button onClick={() => this.openForm("product")} style={css("border:none; background:#2f6bed; color:#fff; font-weight:700; font-size:13px; padding:9px 15px; border-radius:9px; cursor:pointer;")}>+ Add Product</button></div>
-        <div style={css("background:#fff; border-radius:16px; padding:6px 22px 16px; border:1px solid #eef1f7;")}>
-          <table style={css("width:100%; border-collapse:collapse;")}>
-            <thead><tr style={css("text-align:left;")}>
-              <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7;")}>PRODUCT TITLE</th>
-              <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7;")}>BARCODE / SKU</th>
-              <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7; text-align:right;")}>UNIT PRICE</th>
-              <th style={css("font-size:11px; color:#9aa3b5; font-weight:700; padding:14px 6px 10px; border-bottom:1px solid #eef1f7; text-align:right;")}>DISC %</th>
-              <th style={css("border-bottom:1px solid #eef1f7;")}></th>
-            </tr></thead>
-            <tbody>
-              {this.state.products.map((p) => (
-                <tr key={p.id}>
-                  <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; font-weight:700; font-size:13px;")}>{p.title}</td>
-                  <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; font-size:12.5px;")}><span style={css("font-family:'Space Grotesk'; font-weight:600; color:#2f6bed;")}>{p.asin}</span> <span style={css("color:#9aa3b5;")}>/ {p.sku}</span></td>
-                  <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-weight:800; font-size:13px; font-family:'Space Grotesk';")}>{money(p.unitPrice, cur)}</td>
-                  <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right; font-size:13px;")}>{p.discountPct}%</td>
-                  <td style={css("padding:12px 6px; border-bottom:1px solid #f4f6fb; text-align:right;")}>
-                    <button onClick={() => this.openForm("product", p.id)} style={css("border:1px solid #e2e8f5; background:#fff; color:#5b6478; font-weight:700; font-size:11.5px; padding:5px 10px; border-radius:7px; cursor:pointer; margin-right:5px;")}>Edit</button>
-                    <button onClick={() => this.removeEntity("product", p.id)} style={css("border:1px solid #f6dfe0; background:#fff; color:#d64545; font-weight:700; font-size:11.5px; padding:5px 10px; border-radius:7px; cursor:pointer;")}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <ProductsView
+        products={this.state.products}
+        currency={this.state.currency}
+        onAdd={() => this.openForm("product")}
+        onEdit={(id) => this.openForm("product", id)}
+        onDelete={(id) => this.removeEntity("product", id)}
+      />
     );
   }
 
