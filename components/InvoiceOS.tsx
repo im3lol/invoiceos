@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import TemplateBuilder from "./TemplateBuilder";
 import InvoicesView from "./InvoicesView";
 import ProductsView from "./ProductsView";
@@ -18,6 +18,7 @@ import type { TemplateRecord } from "@/lib/templateTypes";
 interface InvoiceOSProps {
   userEmail?: string;
   onSignOut?: () => void;
+  onChangePassword?: (password: string) => Promise<void>;
 }
 
 interface FormState {
@@ -38,6 +39,7 @@ interface State {
   form: FormState;
   editingInvoice: Invoice | null;
   previewInvoice: Invoice | null;
+  changePasswordOpen: boolean;
   toast: { msg: string; kind: "err" | "ok" } | null;
 }
 
@@ -70,6 +72,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
       form: { open: false, type: null, id: null, title: "", data: {} },
       editingInvoice: null,
       previewInvoice: null,
+      changePasswordOpen: false,
       toast: null,
     };
   }
@@ -336,6 +339,9 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
               <div style={{ width: "28px", height: "28px", flex: "0 0 28px", borderRadius: "50%", background: "#dfe7f8", color: "#2f6bed", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "12px" }}>{(this.props.userEmail || "A").charAt(0).toUpperCase()}</div>
               <div style={{ fontSize: "12px", fontWeight: "700", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={this.props.userEmail || "Amazon Seller"}>{this.props.userEmail || "Amazon Seller"}</div>
             </div>
+            {this.props.onChangePassword && (
+              <button onClick={() => this.setState({ changePasswordOpen: true })} style={{ width: "100%", border: "1px solid #e2e8f5", background: "#fff", color: "#5b6478", fontWeight: "700", fontSize: "12px", padding: "7px", borderRadius: "8px", cursor: "pointer", marginBottom: "7px" }}>Change password</button>
+            )}
             {this.props.onSignOut && (
               <button onClick={this.props.onSignOut} style={{ width: "100%", border: "1px solid #e2e8f5", background: "#fff", color: "#d64545", fontWeight: "700", fontSize: "12px", padding: "7px", borderRadius: "8px", cursor: "pointer" }}>Sign out</button>
             )}
@@ -459,6 +465,17 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
               </div>
             </div>
           </div>
+        )}
+
+        {/* change-password modal */}
+        {st.changePasswordOpen && this.props.onChangePassword && (
+          <ChangePasswordModal
+            onClose={() => this.setState({ changePasswordOpen: false })}
+            onSubmit={async (password) => {
+              await this.props.onChangePassword!(password);
+              this.notify("Password changed ✓", "ok");
+            }}
+          />
         )}
       </div>
     );
@@ -607,4 +624,57 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
     if (!ft) return [];
     return fieldDefs[ft].map(([key, label, sp, ph]) => ({ key, label, ph, value: this.state.form.data[key] != null ? String(this.state.form.data[key]) : "", span: sp === "2" ? "1/3" : "auto" }));
   }
+}
+
+/* ---------- change password (self-service, no old password needed —
+ * Supabase authorizes this off the current session, same as its own UI) ---------- */
+function ChangePasswordModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (password: string) => Promise<void> }) {
+  const [pass, setPass] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pass.length < 6) return setErr("Password must be at least 6 characters.");
+    if (pass !== confirm) return setErr("Passwords don't match.");
+    setErr("");
+    setBusy(true);
+    try {
+      await onSubmit(pass);
+      onClose();
+    } catch (e2) {
+      setErr((e2 as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fld: React.CSSProperties = { width: "100%", margin: "5px 0 14px", padding: "10px 12px", border: "1px solid #e2e8f5", borderRadius: 9, fontSize: 13, fontWeight: 600 };
+  const lbl: React.CSSProperties = { fontSize: 11, color: "#9aa3b5", fontWeight: 700 };
+
+  return (
+    <div className="no-print" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,28,50,.42)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, animation: "fadein .2s ease" }}>
+      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 18, padding: 26, width: 380, animation: "popin .25s ease", boxShadow: "0 24px 60px rgba(20,30,60,.3)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>Change Password</div>
+          <button type="button" onClick={onClose} style={{ border: "none", background: "#f4f6fb", color: "#7c8598", fontWeight: 800, width: 30, height: 30, borderRadius: 8, cursor: "pointer" }}>×</button>
+        </div>
+
+        <label style={lbl}>New Password</label>
+        <input type="password" required minLength={6} autoFocus value={pass} onChange={(e) => setPass(e.target.value)} placeholder="••••••••" style={fld} />
+        <label style={lbl}>Confirm Password</label>
+        <input type="password" required minLength={6} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••" style={fld} />
+
+        {err && <div style={{ color: "#d64545", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>{err}</div>}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+          <button type="submit" disabled={busy} style={{ flex: 1, border: "none", background: "#2f6bed", color: "#fff", fontWeight: 700, fontSize: 13.5, padding: 12, borderRadius: 10, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
+            {busy ? "Saving…" : "Save"}
+          </button>
+          <button type="button" onClick={onClose} style={{ border: "1px solid #e2e8f5", background: "#fff", color: "#1e2433", fontWeight: 700, fontSize: 13.5, padding: "12px 18px", borderRadius: 10, cursor: "pointer" }}>Cancel</button>
+        </div>
+      </form>
+    </div>
+  );
 }

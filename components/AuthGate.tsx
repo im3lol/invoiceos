@@ -26,7 +26,11 @@ export default function AuthGate() {
   // No Supabase configured → run without auth (localStorage fallback).
   if (!supabase) return <InvoiceOS />;
   if (!session) return <Login />;
-  return <InvoiceOS key={session.user.id} userEmail={session.user.email || ""} onSignOut={() => supabase!.auth.signOut()} />;
+  const changePassword = async (password: string) => {
+    const { error } = await supabase!.auth.updateUser({ password });
+    if (error) throw error;
+  };
+  return <InvoiceOS key={session.user.id} userEmail={session.user.email || ""} onSignOut={() => supabase!.auth.signOut()} onChangePassword={changePassword} />;
 }
 
 function Splash({ label }: { label: string }) {
