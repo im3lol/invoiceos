@@ -11,6 +11,7 @@ type Kind = "suppliers" | "customers";
 
 interface Draft {
   number: string;
+  orderId: string;
   date: string;
   dueDate: string;
   status: InvoiceStatus;
@@ -57,6 +58,7 @@ export default function InvoiceWizard({
     initial
       ? {
           number: initial.number,
+          orderId: initial.orderId || "",
           date: initial.date,
           dueDate: initial.dueDate,
           status: initial.status,
@@ -70,6 +72,7 @@ export default function InvoiceWizard({
         }
       : {
           number: "INV-" + String(1000 + Math.floor(Math.random() * 8999)),
+          orderId: "",
           date: today(),
           dueDate: today(14),
           status: "Pending",
@@ -99,6 +102,7 @@ export default function InvoiceWizard({
     return {
       id: initial?.id || genId("i"),
       number: draft.number,
+      orderId: draft.orderId || undefined,
       status: draft.status,
       currency: CURRENCY,
       date: draft.date,
@@ -128,7 +132,7 @@ export default function InvoiceWizard({
       const lines = [...d.lines];
       const ex = lines.findIndex((l) => l.productId === pid);
       if (ex >= 0) lines[ex] = { ...lines[ex], qty: (+lines[ex].qty || 0) + 1 };
-      else lines.push({ productId: p.id, description: p.title, asin: p.asin, qty: 1, unitPrice: p.unitPrice, discountPct: p.discountPct });
+      else lines.push({ productId: p.id, description: p.title, asin: p.asin, sku: p.sku, qty: 1, unitPrice: p.unitPrice, discountPct: p.discountPct });
       return { ...d, lines };
     });
     setProductQuery("");
@@ -217,6 +221,7 @@ export default function InvoiceWizard({
                 <PartyPicker label="Your Company (Seller)" value={draft.supplierId} onChange={selectSupplier} options={suppliers.map((s) => ({ id: s.id, label: s.name }))} onAdd={() => setQuickAdd("suppliers")} />
                 <PartyPicker label="Bill To (Customer)" value={draft.customerId} onChange={(v) => set({ customerId: v })} options={customers.map((c) => ({ id: c.id, label: c.store }))} onAdd={() => setQuickAdd("customers")} />
                 <Field label="Invoice #"><input value={draft.number} onChange={(e) => set({ number: e.target.value })} style={inp} /></Field>
+                <Field label="Amazon Order ID (optional)"><input value={draft.orderId} onChange={(e) => set({ orderId: e.target.value })} placeholder="111-2223334-5556667" style={inp} /></Field>
                 <Field label="Date"><input type="date" value={toISO(draft.date)} onChange={(e) => set({ date: toDisplay(e.target.value) })} style={inp} /></Field>
                 <Field label="Due Date"><input type="date" value={toISO(draft.dueDate)} onChange={(e) => set({ dueDate: toDisplay(e.target.value) })} style={inp} /></Field>
                 <Field label="Status">

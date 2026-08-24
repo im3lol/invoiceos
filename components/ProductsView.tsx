@@ -4,7 +4,9 @@ import React, { useMemo, useState } from "react";
 import type { Product } from "@/lib/domain";
 import { genId } from "@/lib/domain";
 import { money } from "@/lib/calc";
+import type { ParseResult } from "@/lib/parseProducts";
 import { parseProducts } from "@/lib/parseProducts";
+import { parseProductsFromFile } from "@/lib/parseExcel";
 
 const PAGE_SIZE = 20;
 type SortKey = "title" | "priceHi" | "priceLo";
@@ -186,8 +188,35 @@ function Act({ children, onClick, color }: { children: React.ReactNode; onClick:
 function BulkAdd({ products, onClose, onSave }: { products: Product[]; onClose: () => void; onSave: (list: Product[]) => Promise<void> }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // A file and the paste box are mutually exclusive sources — picking one
+  // clears the other's result so there's never a question of which "wins".
+  const [fileResult, setFileResult] = useState<ParseResult | null>(null);
+  const [fileName, setFileName] = useState("");
+  const [fileBusy, setFileBusy] = useState(false);
+  const [fileError, setFileError] = useState("");
 
-  const parsed = useMemo(() => parseProducts(text), [text]);
+  const textResult = useMemo(() => (text.trim() ? parseProducts(text) : null), [text]);
+  const parsed = fileResult || textResult;
+
+  const onTextChange = (v: string) => {
+    setText(v);
+    if (v.trim()) { setFileResult(null); setFileName(""); setFileError(""); }
+  };
+  const onFilePicked = async (file: File | undefined) => {
+    if (!file) return;
+    setText("");
+    setFileName(file.name);
+    setFileError("");
+    setFileBusy(true);
+    try {
+      setFileResult(await parseProductsFromFile(file));
+    } catch (e) {
+      setFileResult(null);
+      setFileError("Couldn't read that file — " + (e as Error).message);
+    } finally {
+      setFileBusy(false);
+    }
+  };
 
   // Match on barcode first, then SKU — either one identifies an existing product.
   const existing = useMemo(() => {
@@ -201,21 +230,23 @@ function BulkAdd({ products, onClose, onSave }: { products: Product[]; onClose: 
   const matchOf = (p: { asin: string; sku: string }) =>
     (p.asin && existing.get("a:" + p.asin.toLowerCase())) || (p.sku && existing.get("s:" + p.sku.toLowerCase())) || null;
 
-  const updates = parsed.rows.filter((r) => matchOf(r.product)).length;
-  const adds = parsed.rows.length - updates;
+  const rows = parsed?.rows || [];
+  const errors = parsed?.errors || [];
+  const updates = rows.filter((r) => matchOf(r.product)).length;
+  const adds = rows.length - updates;
 
   const save = async () => {
     setBusy(true);
     try {
-      await onSave(parsed.rows.map((r) => ({ ...r.product, id: matchOf(r.product)?.id || genId("p") })));
+      await onSave(rows.map((r) => ({ ...r.product, id: matchOf(r.product)?.id || genId("p") })));
       onClose();
     } finally {
       setBusy(false);
     }
   };
 
-  const preview = parsed.rows.slice(0, 8);
-  const hidden = parsed.rows.length - preview.length;
+  const preview = rows.slice(0, 8);
+  const hidden = rows.length - preview.length;
   return (
     <div className="no-print" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,28,50,.42)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20, animation: "fadein .2s ease" }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 18, padding: 24, width: 720, maxHeight: "88vh", overflow: "auto", animation: "popin .25s ease", boxShadow: "0 24px 60px rgba(20,30,60,.3)" }}>
@@ -224,31 +255,42 @@ function BulkAdd({ products, onClose, onSave }: { products: Product[]; onClose: 
           <button onClick={onClose} style={{ border: "none", background: "#f4f6fb", color: "#7c8598", fontWeight: 800, width: 30, height: 30, borderRadius: 8, cursor: "pointer" }}>×</button>
         </div>
         <div style={{ fontSize: 12, color: "#7c8598", fontWeight: 600, marginBottom: 12, lineHeight: 1.6 }}>
-          Copy the rows out of Excel or Google Sheets and paste them here, or paste CSV. Column order:{" "}
+          Upload an Excel file, or copy rows out of Excel/Sheets and paste them below. Column order:{" "}
           <b>title · barcode · SKU · unit price · discount %</b>. A header row is ignored, and a row matching an existing barcode or SKU updates that product.
         </div>
 
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 7, border: "1px solid #2f6bed", background: "#eef4fe", color: "#2f6bed", fontWeight: 800, fontSize: 12.5, padding: "9px 14px", borderRadius: 9, cursor: "pointer" }}>
+            {fileBusy ? "Reading…" : "Upload .xlsx / .csv"}
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => onFilePicked(e.target.files?.[0])} disabled={fileBusy} style={{ display: "none" }} />
+          </label>
+          {fileName && !fileBusy && <span style={{ fontSize: 12, color: "#5b6478", fontWeight: 600 }}>{fileName}</span>}
+        </div>
+        {fileError && <div style={{ fontSize: 12, color: "#d64545", fontWeight: 700, marginBottom: 10 }}>{fileError}</div>}
+
+        <div style={{ fontSize: 11, color: "#aab2c4", fontWeight: 700, textAlign: "center", margin: "2px 0 10px" }}>— or paste rows —</div>
+
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => onTextChange(e.target.value)}
           rows={9}
           spellCheck={false}
           placeholder={"Wireless Earbuds Pro\tB09ABC1234\tWEP-001\t79.99\t0\nLED Desk Lamp\tB08JKL3456\tLDL-10\t39.99\t10"}
           style={{ width: "100%", border: "1px solid #e2e8f5", borderRadius: 10, padding: "10px 12px", fontSize: 12.5, fontWeight: 600, fontFamily: "'Space Grotesk', monospace", lineHeight: 1.6, resize: "vertical" }}
         />
 
-        {text.trim() !== "" && (
+        {parsed && (
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 8 }}>
               {adds} to add
               {updates > 0 && <span style={{ color: "#2f6bed" }}> · {updates} to update</span>}
-              {parsed.errors.length > 0 && <span style={{ color: "#d64545" }}> · {parsed.errors.length} skipped</span>}
+              {errors.length > 0 && <span style={{ color: "#d64545" }}> · {errors.length} skipped</span>}
             </div>
 
-            {parsed.errors.length > 0 && (
+            {errors.length > 0 && (
               <div style={{ background: "#fdf4f4", border: "1px solid #f6dfe0", borderRadius: 10, padding: "9px 12px", marginBottom: 10, maxHeight: 110, overflow: "auto" }}>
-                {parsed.errors.map((e) => (
-                  <div key={e.line} style={{ fontSize: 11.5, color: "#d64545", fontWeight: 600 }}>Line {e.line}: {e.msg}</div>
+                {errors.map((e) => (
+                  <div key={e.line} style={{ fontSize: 11.5, color: "#d64545", fontWeight: 600 }}>Row {e.line}: {e.msg}</div>
                 ))}
               </div>
             )}
@@ -288,10 +330,10 @@ function BulkAdd({ products, onClose, onSave }: { products: Product[]; onClose: 
         <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
           <button
             onClick={save}
-            disabled={busy || parsed.rows.length === 0}
-            style={{ flex: 1, border: "none", background: "#2f6bed", color: "#fff", fontWeight: 800, fontSize: 13.5, padding: 12, borderRadius: 10, cursor: parsed.rows.length ? "pointer" : "default", opacity: busy || parsed.rows.length === 0 ? 0.5 : 1 }}
+            disabled={busy || rows.length === 0}
+            style={{ flex: 1, border: "none", background: "#2f6bed", color: "#fff", fontWeight: 800, fontSize: 13.5, padding: 12, borderRadius: 10, cursor: rows.length ? "pointer" : "default", opacity: busy || rows.length === 0 ? 0.5 : 1 }}
           >
-            {busy ? "Importing…" : parsed.rows.length > 0 ? "Import " + parsed.rows.length : "Import"}
+            {busy ? "Importing…" : rows.length > 0 ? "Import " + rows.length : "Import"}
           </button>
           <button onClick={onClose} style={{ border: "1px solid #e2e8f5", background: "#fff", color: "#1e2433", fontWeight: 800, fontSize: 13.5, padding: "12px 18px", borderRadius: 10, cursor: "pointer" }}>Cancel</button>
         </div>

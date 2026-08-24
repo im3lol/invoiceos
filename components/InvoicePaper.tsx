@@ -34,6 +34,7 @@ function cellValue(col: RenderCol, l: InvoiceLine, i: number): React.ReactNode {
     case "index": return i + 1;
     case "description": return l.description || "Item";
     case "asin": return l.asin;
+    case "sku": return l.sku || "";
     case "qty": return l.qty;
     case "rate": return money(+l.unitPrice);
     case "discount": return (+l.discountPct || 0) + "%";
@@ -114,6 +115,7 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
             <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: ".5px", color: page.primary }}>{(p.title as string) || "TAX INVOICE"}</div>
             <div style={{ marginTop: 8, fontSize: 11, color: muted, lineHeight: 1.8 }}>
               <div>Invoice # <b style={{ color: "#1e2433" }}>{invoice.number}</b></div>
+              {invoice.orderId && <div>Order ID <b style={{ color: "#1e2433" }}>{invoice.orderId}</b></div>}
               <div>Date <b style={{ color: "#1e2433" }}>{invoice.date}</b></div>
               <div>Due <b style={{ color: "#1e2433" }}>{invoice.dueDate}</b></div>
             </div>

@@ -1,8 +1,11 @@
 import type { Product } from "./domain";
 
-/* Parser for the bulk-add box: rows pasted from Excel/Sheets (tab-separated)
- * or a CSV file. Column order: title, barcode, sku, unit price, discount %.
- * Bad rows are reported by line number instead of failing the whole paste. */
+/* Parser for the bulk-add box: rows pasted from Excel/Sheets (tab-separated),
+ * a CSV file, or read straight from an uploaded .xlsx/.xls/.csv workbook (see
+ * parseExcel.ts, which turns a sheet into rows and hands them to
+ * parseProductRows below). Column order: title, barcode, sku, unit price,
+ * discount %. Bad rows are reported by line number instead of failing the
+ * whole batch. */
 
 export type NewProduct = Omit<Product, "id">;
 export interface ParsedRow {
@@ -55,15 +58,23 @@ function num(raw: string): number | null {
   return Number(cleaned);
 }
 
-export function parseProducts(text: string): ParseResult {
+/** An Excel cell can come back as a string, a number, a boolean, or a Date —
+ * normalize everything to the trimmed string the validators expect. */
+function toCell(v: unknown): string {
+  return v == null ? "" : String(v).trim();
+}
+
+/** Core validator shared by the text-paste and file-upload paths: each row is
+ * already split into cells (title, barcode, sku, price, discount, ...). */
+export function parseProductRows(rowsOfCells: unknown[][]): ParseResult {
   const rows: ParsedRow[] = [];
   const errors: ParseError[] = [];
   let seenData = false;
 
-  (text || "").split(/\r?\n/).forEach((raw, i) => {
+  (rowsOfCells || []).forEach((rawCells, i) => {
     const line = i + 1;
-    if (!raw.trim()) return;
-    const cells = splitLine(raw);
+    const cells = (rawCells || []).map(toCell);
+    if (!cells.some(Boolean)) return; // blank row
 
     // Only the first non-empty row can be a header.
     if (!seenData && HEADERISH.test(cells[0] || "")) {
@@ -99,4 +110,11 @@ export function parseProducts(text: string): ParseResult {
   });
 
   return { rows, errors };
+}
+
+/** Pasted text (tab-separated from a spreadsheet, or CSV) — splits into lines,
+ * splits each line into cells, then hands off to the shared row validator. */
+export function parseProducts(text: string): ParseResult {
+  const lines = (text || "").split(/\r?\n/);
+  return parseProductRows(lines.map(splitLine));
 }

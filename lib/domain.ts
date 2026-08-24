@@ -38,6 +38,7 @@ export interface InvoiceLine {
   productId: string;
   description: string;
   asin: string;
+  sku?: string; // absent on invoices saved before this field existed
   qty: number | string;
   unitPrice: number | string;
   discountPct: number | string;
@@ -50,6 +51,7 @@ export type InvoiceStatus = "Paid" | "Pending" | "Overdue";
 export interface Invoice {
   id: string;
   number: string;
+  orderId?: string; // Amazon Order ID, so the invoice traces back to Seller Central
   status: InvoiceStatus;
   currency: string; // always EGP today — see CURRENCY in lib/calc
   date: string;

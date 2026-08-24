@@ -7,10 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/calc.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/parseProducts.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/templateTokens.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/starterTemplates.check.mts"
+    "check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/calc.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/parseProducts.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/templateTokens.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/starterTemplates.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/parseExcel.check.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
+    "exceljs": "^4.4.0",
     "next": "^15.5.20",
     "react": "19.0.0",
     "react-dom": "19.0.0"

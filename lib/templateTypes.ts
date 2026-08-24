@@ -24,12 +24,13 @@ export type BlockType =
 
 /** Which invoice-line field a product-table column shows. "custom" = a free
  * per-line value entered on the invoice. */
-export type ColField = "index" | "description" | "asin" | "qty" | "rate" | "discount" | "amount" | "custom";
+export type ColField = "index" | "description" | "asin" | "sku" | "qty" | "rate" | "discount" | "amount" | "custom";
 
 export const COL_FIELDS: { value: ColField; label: string }[] = [
   { value: "index", label: "# (row no.)" },
   { value: "description", label: "Item / Description" },
   { value: "asin", label: "Barcode / UPC" },
+  { value: "sku", label: "SKU" },
   { value: "qty", label: "Qty" },
   { value: "rate", label: "Unit Price" },
   { value: "discount", label: "Discount %" },

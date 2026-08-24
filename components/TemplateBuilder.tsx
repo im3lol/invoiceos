@@ -646,9 +646,9 @@ function EditBody({ block, onPatch }: { block: Block; onPatch: (p: Patch) => voi
           <div style={{ textAlign: "right", minWidth: 170 }}>
             <Inline value={p.title as string} onChange={(v) => onPatch({ title: v })} bold size={18} align="right" placeholder="TAX INVOICE" />
             <div style={{ marginTop: 8, fontSize: 11, color: "#aab2c4", lineHeight: 1.8 }}>
-              <div>Invoice # · Date · Due</div>
+              <div>Invoice # · Order ID · Date · Due</div>
             </div>
-            <Hint>Locked — always the invoice&apos;s own number/date/due date.</Hint>
+            <Hint>Locked — always the invoice&apos;s own number/order ID/date/due date.</Hint>
           </div>
         </div>
       );
