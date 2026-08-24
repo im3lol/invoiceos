@@ -2,28 +2,31 @@
 
 import React, { useMemo, useState } from "react";
 import type { Product } from "@/lib/domain";
+import { genId } from "@/lib/domain";
 import { money } from "@/lib/calc";
+import { parseProducts } from "@/lib/parseProducts";
 
 const PAGE_SIZE = 20;
 type SortKey = "title" | "priceHi" | "priceLo";
 
 export default function ProductsView({
   products,
-  currency,
   onAdd,
   onEdit,
   onDelete,
+  onBulkSave,
 }: {
   products: Product[];
-  currency: string;
   onAdd: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onBulkSave: (list: Product[]) => Promise<void>;
 }) {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("title");
   const [discountedOnly, setDiscountedOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const rows = useMemo(() => {
     const ql = q.trim().toLowerCase();
@@ -71,6 +74,7 @@ export default function ProductsView({
           <option value="priceHi">Price: high → low</option>
           <option value="priceLo">Price: low → high</option>
         </select>
+        <button onClick={() => setBulkOpen(true)} style={{ border: "1px solid #e2e8f5", background: "#fff", color: "#1e2433", fontWeight: 800, fontSize: 12.5, padding: "10px 14px", borderRadius: 10, cursor: "pointer" }}>Bulk add</button>
         <button onClick={onAdd} style={{ border: "none", background: "#2f6bed", color: "#fff", fontWeight: 800, fontSize: 13, padding: "10px 16px", borderRadius: 10, cursor: "pointer", boxShadow: "0 3px 10px rgba(47,107,237,.28)" }}>+ Add Product</button>
       </div>
 
@@ -92,7 +96,7 @@ export default function ProductsView({
                 <td style={{ ...td, fontSize: 12.5 }}>
                   <span style={{ fontFamily: "'Space Grotesk'", fontWeight: 600, color: "#2f6bed" }}>{p.asin}</span> <span style={{ color: "#9aa3b5" }}>/ {p.sku}</span>
                 </td>
-                <td style={{ ...td, textAlign: "right", fontWeight: 800, fontFamily: "'Space Grotesk'" }}>{money(p.unitPrice, currency)}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 800, fontFamily: "'Space Grotesk'" }}>{money(p.unitPrice)}</td>
                 <td style={{ ...td, textAlign: "right" }}>{p.discountPct}%</td>
                 <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
                   <Act onClick={() => onEdit(p.id)} color="#5b6478">Edit</Act>
@@ -137,6 +141,8 @@ export default function ProductsView({
           </div>
         )}
       </div>
+
+      {bulkOpen && <BulkAdd products={products} onClose={() => setBulkOpen(false)} onSave={onBulkSave} />}
     </div>
   );
 }
@@ -173,3 +179,125 @@ function Act({ children, onClick, color }: { children: React.ReactNode; onClick:
     </button>
   );
 }
+
+/* ---------- bulk add ---------- *
+ * Paste rows straight out of Excel/Sheets (tabs) or a CSV. Rows that match an
+ * existing barcode/SKU update that product instead of creating a duplicate. */
+function BulkAdd({ products, onClose, onSave }: { products: Product[]; onClose: () => void; onSave: (list: Product[]) => Promise<void> }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const parsed = useMemo(() => parseProducts(text), [text]);
+
+  // Match on barcode first, then SKU — either one identifies an existing product.
+  const existing = useMemo(() => {
+    const byKey = new Map<string, Product>();
+    products.forEach((p) => {
+      if (p.asin) byKey.set("a:" + p.asin.toLowerCase(), p);
+      if (p.sku) byKey.set("s:" + p.sku.toLowerCase(), p);
+    });
+    return byKey;
+  }, [products]);
+  const matchOf = (p: { asin: string; sku: string }) =>
+    (p.asin && existing.get("a:" + p.asin.toLowerCase())) || (p.sku && existing.get("s:" + p.sku.toLowerCase())) || null;
+
+  const updates = parsed.rows.filter((r) => matchOf(r.product)).length;
+  const adds = parsed.rows.length - updates;
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await onSave(parsed.rows.map((r) => ({ ...r.product, id: matchOf(r.product)?.id || genId("p") })));
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const preview = parsed.rows.slice(0, 8);
+  const hidden = parsed.rows.length - preview.length;
+  return (
+    <div className="no-print" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,28,50,.42)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20, animation: "fadein .2s ease" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 18, padding: 24, width: 720, maxHeight: "88vh", overflow: "auto", animation: "popin .25s ease", boxShadow: "0 24px 60px rgba(20,30,60,.3)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>Bulk add products</div>
+          <button onClick={onClose} style={{ border: "none", background: "#f4f6fb", color: "#7c8598", fontWeight: 800, width: 30, height: 30, borderRadius: 8, cursor: "pointer" }}>×</button>
+        </div>
+        <div style={{ fontSize: 12, color: "#7c8598", fontWeight: 600, marginBottom: 12, lineHeight: 1.6 }}>
+          Copy the rows out of Excel or Google Sheets and paste them here, or paste CSV. Column order:{" "}
+          <b>title · barcode · SKU · unit price · discount %</b>. A header row is ignored, and a row matching an existing barcode or SKU updates that product.
+        </div>
+
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={9}
+          spellCheck={false}
+          placeholder={"Wireless Earbuds Pro\tB09ABC1234\tWEP-001\t79.99\t0\nLED Desk Lamp\tB08JKL3456\tLDL-10\t39.99\t10"}
+          style={{ width: "100%", border: "1px solid #e2e8f5", borderRadius: 10, padding: "10px 12px", fontSize: 12.5, fontWeight: 600, fontFamily: "'Space Grotesk', monospace", lineHeight: 1.6, resize: "vertical" }}
+        />
+
+        {text.trim() !== "" && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 8 }}>
+              {adds} to add
+              {updates > 0 && <span style={{ color: "#2f6bed" }}> · {updates} to update</span>}
+              {parsed.errors.length > 0 && <span style={{ color: "#d64545" }}> · {parsed.errors.length} skipped</span>}
+            </div>
+
+            {parsed.errors.length > 0 && (
+              <div style={{ background: "#fdf4f4", border: "1px solid #f6dfe0", borderRadius: 10, padding: "9px 12px", marginBottom: 10, maxHeight: 110, overflow: "auto" }}>
+                {parsed.errors.map((e) => (
+                  <div key={e.line} style={{ fontSize: 11.5, color: "#d64545", fontWeight: 600 }}>Line {e.line}: {e.msg}</div>
+                ))}
+              </div>
+            )}
+
+            {preview.length > 0 && (
+              <div style={{ border: "1px solid #eef1f7", borderRadius: 10, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f7faff" }}>
+                      {["TITLE", "BARCODE", "SKU", "PRICE", "DISC %", ""].map((h, i) => (
+                        <th key={i} style={{ fontSize: 10, color: "#9aa3b5", fontWeight: 700, padding: "7px 8px", textAlign: i > 2 ? "right" : "left" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.map((r) => {
+                      const hit = matchOf(r.product);
+                      return (
+                        <tr key={r.line}>
+                          <td style={{ ...bcell, fontWeight: 700 }}>{r.product.title}</td>
+                          <td style={{ ...bcell, fontFamily: "'Space Grotesk'", color: "#2f6bed" }}>{r.product.asin || "—"}</td>
+                          <td style={{ ...bcell, color: "#9aa3b5" }}>{r.product.sku || "—"}</td>
+                          <td style={{ ...bcell, textAlign: "right", fontWeight: 700 }}>{money(r.product.unitPrice)}</td>
+                          <td style={{ ...bcell, textAlign: "right" }}>{r.product.discountPct}%</td>
+                          <td style={{ ...bcell, textAlign: "right", fontSize: 10, fontWeight: 800, color: hit ? "#2f6bed" : "#1f9d63" }}>{hit ? "UPDATE" : "NEW"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {hidden > 0 && <div style={{ padding: "7px 10px", fontSize: 11, color: "#9aa3b5", fontWeight: 600, background: "#fbfcfe" }}>+ {hidden} more</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+          <button
+            onClick={save}
+            disabled={busy || parsed.rows.length === 0}
+            style={{ flex: 1, border: "none", background: "#2f6bed", color: "#fff", fontWeight: 800, fontSize: 13.5, padding: 12, borderRadius: 10, cursor: parsed.rows.length ? "pointer" : "default", opacity: busy || parsed.rows.length === 0 ? 0.5 : 1 }}
+          >
+            {busy ? "Importing…" : parsed.rows.length > 0 ? "Import " + parsed.rows.length : "Import"}
+          </button>
+          <button onClick={onClose} style={{ border: "1px solid #e2e8f5", background: "#fff", color: "#1e2433", fontWeight: 800, fontSize: 13.5, padding: "12px 18px", borderRadius: 10, cursor: "pointer" }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const bcell: React.CSSProperties = { fontSize: 11.5, padding: "7px 8px", borderTop: "1px solid #f4f6fb" };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Align,
   Block,
@@ -20,6 +20,8 @@ import {
   uid,
 } from "@/lib/templateTypes";
 import { deleteTemplate, listTemplates, saveTemplate, setPublished, usingSupabase } from "@/lib/templatesApi";
+import { hasToken } from "@/lib/templateTokens";
+import { StarterTemplate, starterTemplates } from "@/lib/starterTemplates";
 
 type DragPayload = { kind: "add"; type: BlockType } | { kind: "move"; id: string } | null;
 
@@ -48,6 +50,7 @@ export default function TemplateBuilder() {
   const [saving, setSaving] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [activeZone, setActiveZone] = useState<number | null>(null);
+  const [addingKey, setAddingKey] = useState<string | null>(null);
   // "gallery" = landing grid of saved templates; "editor" = the drag-drop canvas.
   const [mode, setMode] = useState<"gallery" | "editor">("gallery");
 
@@ -204,6 +207,7 @@ export default function TemplateBuilder() {
 
   const removeTemplate = useCallback(
     async (rec: TemplateRecord) => {
+      if (!window.confirm(`Delete template “${rec.name}”? This can't be undone.`)) return;
       try {
         await deleteTemplate(rec.id);
         if (rec.id === currentId) newTemplate();
@@ -213,6 +217,27 @@ export default function TemplateBuilder() {
       }
     },
     [currentId, newTemplate, refreshTemplates, showFlash],
+  );
+
+  // Computed once — matching is by name against the user's saved templates, so
+  // a starter already added (even if since edited) drops off this list.
+  const starters = useMemo(() => starterTemplates(), []);
+  const missingStarters = starters.filter((s) => !templates.some((t) => t.name === s.doc.name));
+
+  const useStarter = useCallback(
+    async (starter: StarterTemplate) => {
+      setAddingKey(starter.key);
+      try {
+        const rec = await saveTemplate(starter.doc.name, starter.doc);
+        await refreshTemplates();
+        loadTemplate({ ...rec, doc: starter.doc });
+      } catch (e) {
+        showFlash("Couldn't add template — " + (e as Error).message);
+      } finally {
+        setAddingKey(null);
+      }
+    },
+    [refreshTemplates, loadTemplate, showFlash],
   );
 
   /* ---------- drag & drop ---------- */
@@ -239,6 +264,34 @@ export default function TemplateBuilder() {
     const galleryCard: React.CSSProperties = { background: "#fff", border: "1px solid #eef1f7", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 10px rgba(20,30,60,.04)" };
     return (
       <div style={{ animation: "fadein .3s ease" }}>
+        {missingStarters.length > 0 && (
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 3 }}>Start from a template</div>
+            <div style={{ fontSize: 11.5, color: "#9aa3b5", fontWeight: 600, marginBottom: 10 }}>Built-in layouts — add one to your library, then tweak it freely.</div>
+            <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+              {missingStarters.map((s) => (
+                <div key={s.key} style={{ ...galleryCard, flex: "0 0 190px" }}>
+                  <div style={{ height: 150, overflow: "hidden", background: "#f4f7fd", borderBottom: "1px solid #eef1f7" }}>
+                    <div style={{ transform: "scale(.26)", transformOrigin: "top left", width: 640, pointerEvents: "none" }}>
+                      <PreviewPaper doc={s.doc} />
+                    </div>
+                  </div>
+                  <div style={{ padding: "9px 10px" }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.doc.name}</div>
+                    <button
+                      onClick={() => useStarter(s)}
+                      disabled={addingKey === s.key}
+                      style={{ width: "100%", border: "1px solid #dfe7f8", background: "#eef4fe", color: "#2f6bed", fontWeight: 800, fontSize: 11, padding: "7px 0", borderRadius: 8, cursor: addingKey === s.key ? "default" : "pointer", opacity: addingKey === s.key ? 0.6 : 1 }}
+                    >
+                      {addingKey === s.key ? "Adding…" : "Use this template"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 800 }}>Your Templates</div>
@@ -585,13 +638,17 @@ function EditBody({ block, onPatch }: { block: Block; onPatch: (p: Patch) => voi
               <input value={p.logoText as string} onChange={(e) => onPatch({ logoText: e.target.value })} style={{ ...cellInput, width: 46, height: 46, textAlign: "center", fontWeight: 800, background: "#fef3c7", border: "1px solid #f4d78a", borderRadius: 8 }} />
             )}
             <div>
-              <Inline value={p.supplierName as string} onChange={(v) => onPatch({ supplierName: v })} bold size={15} placeholder="Company name" />
-              <Area value={p.supplierLines as string} onChange={(v) => onPatch({ supplierLines: v })} size={11} color="#8a93a6" />
+              <Inline value={p.supplierName as string} onChange={(v) => onPatch({ supplierName: v })} bold size={15} disabled />
+              <Area value={p.supplierLines as string} onChange={(v) => onPatch({ supplierLines: v })} size={11} color="#8a93a6" disabled />
+              <Hint>Locked — real invoices always show the selected company&apos;s details here.</Hint>
             </div>
           </div>
           <div style={{ textAlign: "right", minWidth: 170 }}>
             <Inline value={p.title as string} onChange={(v) => onPatch({ title: v })} bold size={18} align="right" placeholder="TAX INVOICE" />
-            <MetaEditor rows={p.metaRows as MetaRow[]} onMutate={(recipe) => onPatch((prev) => ({ ...prev, metaRows: recipe((prev.metaRows as MetaRow[]) || []) }))} />
+            <div style={{ marginTop: 8, fontSize: 11, color: "#aab2c4", lineHeight: 1.8 }}>
+              <div>Invoice # · Date · Due</div>
+            </div>
+            <Hint>Locked — always the invoice&apos;s own number/date/due date.</Hint>
           </div>
         </div>
       );
@@ -601,8 +658,9 @@ function EditBody({ block, onPatch }: { block: Block; onPatch: (p: Patch) => voi
           {(["left", "right"] as const).map((side) => (
             <div key={side}>
               <Inline value={p[side + "Label"] as string} onChange={(v) => onPatch({ [side + "Label"]: v })} bold size={10} upper color="#8a93a6" />
-              <Inline value={p[side + "Name"] as string} onChange={(v) => onPatch({ [side + "Name"]: v })} bold size={13} />
-              <Area value={p[side + "Lines"] as string} onChange={(v) => onPatch({ [side + "Lines"]: v })} size={11} color="#5b6478" />
+              <Inline value={p[side + "Name"] as string} onChange={(v) => onPatch({ [side + "Name"]: v })} bold size={13} disabled />
+              <Area value={p[side + "Lines"] as string} onChange={(v) => onPatch({ [side + "Lines"]: v })} size={11} color="#5b6478" disabled />
+              <Hint>Locked — real invoices always show the selected customer&apos;s details here.</Hint>
             </div>
           ))}
         </div>
@@ -707,14 +765,30 @@ function TableEditor({ columns, rows, onPatch }: { columns: Column[]; rows: Tabl
   );
 }
 
+/** Common totals rows, ready to drop in with one click. */
+const TOTAL_CHIPS: { label: string; row: TotalRow }[] = [
+  { label: "Subtotal", row: { label: "Sub Total", value: "{{subtotal}}" } },
+  { label: "Discount", row: { label: "Discount", value: "-{{discount}}" } },
+  { label: "Tax", row: { label: "Tax ({{taxRate}}%)", value: "{{tax}}" } },
+  { label: "Total", row: { label: "Total", value: "{{total}}", strong: true } },
+  { label: "Paid", row: { label: "Paid", value: "-{{paid}}" } },
+];
+
 function TotalsEditor({ block, onPatch }: { block: Block; onPatch: (p: Patch) => void }) {
   const rows = (block.props.rows as TotalRow[]) || [];
   const rws = (p: Props) => (p.rows as TotalRow[]) || [];
   const patchRow = (i: number, patch: Partial<TotalRow>) => onPatch((prev) => ({ ...prev, rows: rws(prev).map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
   const addRow = () => onPatch((prev) => ({ ...prev, rows: [...rws(prev), { label: "New", value: "0.00" }] }));
+  const addChip = (row: TotalRow) => onPatch((prev) => ({ ...prev, rows: [...rws(prev), { ...row }] }));
   const removeRow = (i: number) => onPatch((prev) => ({ ...prev, rows: rws(prev).filter((_, idx) => idx !== i) }));
+
+  const balanceLabel = (block.props.balanceLabel as string) || "";
+  const balanceValue = (block.props.balanceValue as string) || "";
+  const tokenized = rows.some((r) => hasToken(r.label) || hasToken(r.value)) || hasToken(balanceLabel) || hasToken(balanceValue);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 320, marginLeft: "auto" }}>
+      <Hint>A value made of a token — {"{{subtotal}} {{discount}} {{tax}} {{taxRate}} {{total}} {{paid}} {{balance}}"} — computes from the real order; anything else prints as-is.</Hint>
       {rows.map((r, i) => (
         <div key={i} style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <input value={r.label} onChange={(e) => patchRow(i, { label: e.target.value })} style={{ ...cellInput, flex: 1, fontWeight: r.strong ? 800 : 600 }} />
@@ -723,33 +797,34 @@ function TotalsEditor({ block, onPatch }: { block: Block; onPatch: (p: Patch) =>
           <button onClick={() => removeRow(i)} style={{ ...tinyBtn, color: "#d64545" }}>×</button>
         </div>
       ))}
+
+      {rows.length > 0 && !tokenized && (
+        <Hint>These rows print as literal text on every invoice — use a token below to compute a row from the real order instead.</Hint>
+      )}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 2 }}>
+        {TOTAL_CHIPS.map((c) => (
+          <button key={c.label} onClick={() => addChip(c.row)} title={"Add a " + c.label + " row using {{" + (c.label === "Tax" ? "tax" : c.label.toLowerCase()) + "}}"} style={{ border: "1px dashed #cfe0fb", background: "#eef4fe", color: "#2f6bed", fontWeight: 700, fontSize: 10.5, padding: "3px 8px", borderRadius: 20, cursor: "pointer" }}>
+            + {c.label}
+          </button>
+        ))}
+      </div>
+
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4 }}>
-        <button onClick={addRow} style={{ ...tinyBtn, width: "auto", padding: "0 8px" }}>+ row</button>
+        <button onClick={addRow} style={{ ...tinyBtn, width: "auto", padding: "0 8px" }}>+ blank row</button>
         <label style={{ fontSize: 11, fontWeight: 700, color: "#5b6478", display: "flex", alignItems: "center", gap: 4 }}>
           <input type="checkbox" checked={!!block.props.showBalance} onChange={(e) => onPatch({ showBalance: e.target.checked })} /> Balance bar
         </label>
       </div>
       {!!block.props.showBalance && (
-        <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
-          <input value={block.props.balanceLabel as string} onChange={(e) => onPatch({ balanceLabel: e.target.value })} style={{ ...cellInput, flex: 1, fontWeight: 800 }} />
-          <input value={block.props.balanceValue as string} onChange={(e) => onPatch({ balanceValue: e.target.value })} style={{ ...cellInput, width: 110, textAlign: "right", fontWeight: 800 }} />
-        </div>
+        <>
+          <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
+            <input value={balanceLabel} onChange={(e) => onPatch({ balanceLabel: e.target.value })} style={{ ...cellInput, flex: 1, fontWeight: 800 }} />
+            <input value={balanceValue} onChange={(e) => onPatch({ balanceValue: e.target.value })} style={{ ...cellInput, width: 110, textAlign: "right", fontWeight: 800 }} placeholder="{{balance}}" />
+          </div>
+          {balanceValue && !hasToken(balanceValue) && <Hint>Prints literally — try {"{{balance}}"} to show the real balance due.</Hint>}
+        </>
       )}
-    </div>
-  );
-}
-
-function MetaEditor({ rows, onMutate }: { rows: MetaRow[]; onMutate: (recipe: (rows: MetaRow[]) => MetaRow[]) => void }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
-      {(rows || []).map((r, i) => (
-        <div key={i} style={{ display: "flex", gap: 3, justifyContent: "flex-end" }}>
-          <input value={r.label} onChange={(e) => onMutate((rs) => rs.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))} style={{ ...cellInput, width: 78, fontSize: 10, textAlign: "right", color: "#8a93a6" }} />
-          <input value={r.value} onChange={(e) => onMutate((rs) => rs.map((x, idx) => (idx === i ? { ...x, value: e.target.value } : x)))} style={{ ...cellInput, width: 90, fontSize: 10.5, fontWeight: 700, textAlign: "right" }} />
-          <button onClick={() => onMutate((rs) => rs.filter((_, idx) => idx !== i))} style={{ ...tinyBtn, color: "#d64545" }}>×</button>
-        </div>
-      ))}
-      <button onClick={() => onMutate((rs) => [...(rs || []), { label: "Label", value: "Value" }])} style={{ ...tinyBtn, width: "auto", padding: "0 8px", alignSelf: "flex-end" }}>+ meta</button>
     </div>
   );
 }
@@ -915,6 +990,7 @@ function Inline({
   upper,
   color,
   placeholder,
+  disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -924,11 +1000,13 @@ function Inline({
   upper?: boolean;
   color?: string;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   return (
     <input
       value={value}
       placeholder={placeholder}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       style={{
         border: "1px solid transparent",
@@ -942,17 +1020,20 @@ function Inline({
         letterSpacing: upper ? "1px" : "normal",
         color: color || "#1e2433",
         background: "transparent",
+        opacity: disabled ? 0.55 : 1,
+        cursor: disabled ? "default" : "text",
       }}
-      onFocus={(e) => (e.currentTarget.style.background = "#f5f9ff")}
+      onFocus={(e) => !disabled && (e.currentTarget.style.background = "#f5f9ff")}
       onBlur={(e) => (e.currentTarget.style.background = "transparent")}
     />
   );
 }
 
-function Area({ value, onChange, size = 12, color }: { value: string; onChange: (v: string) => void; size?: number; color?: string }) {
+function Area({ value, onChange, size = 12, color, disabled }: { value: string; onChange: (v: string) => void; size?: number; color?: string; disabled?: boolean }) {
   return (
     <textarea
       value={value}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       rows={Math.max(1, (value || "").split("\n").length)}
       style={{
@@ -966,11 +1047,18 @@ function Area({ value, onChange, size = 12, color }: { value: string; onChange: 
         resize: "vertical",
         lineHeight: 1.5,
         fontFamily: "inherit",
+        opacity: disabled ? 0.55 : 1,
+        cursor: disabled ? "default" : "text",
       }}
-      onFocus={(e) => (e.currentTarget.style.background = "#f5f9ff")}
+      onFocus={(e) => !disabled && (e.currentTarget.style.background = "#f5f9ff")}
       onBlur={(e) => (e.currentTarget.style.background = "transparent")}
     />
   );
+}
+
+/** One-line note explaining why a field is locked or how tokens work. */
+function Hint({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: 9.5, color: "#aab2c4", fontWeight: 700, margin: "3px 0 6px" }}>{children}</div>;
 }
 
 function StyleRow({ label, children }: { label: string; children: React.ReactNode }) {

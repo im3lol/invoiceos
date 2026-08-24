@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/calc.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/parseProducts.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/templateTokens.check.mts && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/starterTemplates.check.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",

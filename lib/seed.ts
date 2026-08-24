@@ -1,26 +1,15 @@
-import { compTotals, taxOf } from "./calc";
+import { compTotals, CURRENCY, taxOf } from "./calc";
 import { Customer, genId, Invoice, InvoiceLine, Product, Supplier } from "./domain";
-import { defaultDoc, TemplateDoc, TemplateRecord } from "./templateTypes";
+import { TemplateRecord } from "./templateTypes";
+import { starterTemplates } from "./starterTemplates";
 import { saveEntity } from "./entitiesApi";
 import { insertInvoices } from "./invoicesApi";
 import { listTemplates, saveTemplate, setPublished } from "./templatesApi";
 
 /* Per-user demo seeding: creates fresh companies/customers/products (with unique
- * ids), three starter templates and nine sample invoices, all owned by the caller. */
-
-export function defaultTemplates(): TemplateDoc[] {
-  const base = defaultDoc();
-  const mk = (name: string, primary: string, accent: string, accentText: string): TemplateDoc => ({
-    ...JSON.parse(JSON.stringify(base)),
-    name,
-    page: { margin: 44, primary, accent, accentText, font: "Manrope" },
-  });
-  return [
-    mk("Classic (dark table)", "#1f2937", "#fde68a", "#7a5a00"),
-    mk("Corporate (blue)", "#2563eb", "#dbe7ff", "#1e3a8a"),
-    mk("Minimal (accent)", "#111111", "#f7e733", "#5a5300"),
-  ];
-}
+ * ids), the built-in starter templates and nine sample invoices, all owned by
+ * the caller. Template *content* lives in lib/starterTemplates so this list
+ * and the Template Builder's "start from a template" strip stay in sync. */
 
 const DEMO_SUPPLIERS: Omit<Supplier, "id">[] = [
   { name: "Zylker Dezigns", legal: "Zylker Dezigns LLC", taxId: "TRN 3001234567890", email: "billing@zylker.com", phone: "+966 55 000 1234", addr: "P.O. Box 8223, Tahlia Street, Jeddah, KSA", website: "www.zylkerdezigns.com", logoText: "ZD", taxEnabled: true, taxRate: 14 },
@@ -67,7 +56,7 @@ function buildDemoInvoices(sups: Supplier[], cuss: Customer[], prds: Product[], 
       id: genId("i"),
       number: d.number,
       status: d.status,
-      currency: "EGP",
+      currency: CURRENCY,
       date: d.date,
       dueDate: d.dueDate,
       supplierId: supplier.id,
@@ -115,7 +104,7 @@ export async function seedDemo(): Promise<void> {
   let tpls = existing;
   if (existing.length === 0) {
     tpls = [];
-    for (const doc of defaultTemplates()) {
+    for (const { doc } of starterTemplates()) {
       const rec = await saveTemplate(doc.name, doc);
       await setPublished(rec.id, true);
       tpls.push({ ...rec, doc });

@@ -37,3 +37,20 @@ export async function deleteEntity(kind: EntityKind, id: string): Promise<void> 
   const { error } = await supabase.from(kind).delete().eq("id", id);
   if (error) throw error;
 }
+
+/** Bulk upsert — one round trip for a whole pasted batch instead of N. */
+export async function saveEntities<T extends { id: string }>(kind: EntityKind, list: T[]): Promise<T[]> {
+  if (!list.length) return [];
+  if (!supabase) {
+    const arr = mem[kind];
+    list.forEach((rec) => {
+      const i = arr.findIndex((x) => (x as { id: string }).id === rec.id);
+      if (i >= 0) arr[i] = rec;
+      else arr.push(rec);
+    });
+    return list;
+  }
+  const { error } = await supabase.from(kind).upsert(list.map((rec) => ({ id: rec.id, data: rec })));
+  if (error) throw error;
+  return list;
+}

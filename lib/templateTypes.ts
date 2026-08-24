@@ -149,13 +149,15 @@ export function makeBlock(type: BlockType): Block {
         type,
         props: {
           rows: [
-            { label: "Sub Total", value: "2760.00" },
-            { label: "Tax (15%)", value: "414.00" },
-            { label: "Total", value: "2760.00", strong: true },
+            { label: "Sub Total", value: "{{subtotal}}" },
+            { label: "Discount", value: "-{{discount}}" },
+            { label: "Tax ({{taxRate}}%)", value: "{{tax}}" },
+            { label: "Total", value: "{{total}}", strong: true },
+            { label: "Paid", value: "-{{paid}}" },
           ] as TotalRow[],
           showBalance: true,
           balanceLabel: "Balance Due",
-          balanceValue: "SAR 2760.00",
+          balanceValue: "{{balance}}",
         },
       };
     case "logo":

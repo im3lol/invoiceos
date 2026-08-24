@@ -9,7 +9,6 @@ const stColor = (s: string) => (s === "Paid" ? { bg: "#e5f6ec", fg: "#1f9d63" } 
 
 export default function InvoicesView({
   invoices,
-  currency,
   onNew,
   onOpen,
   onDelete,
@@ -18,7 +17,6 @@ export default function InvoicesView({
   onPreview,
 }: {
   invoices: Invoice[];
-  currency: string;
   onNew: () => void;
   onOpen: (inv: Invoice) => void;
   onDelete: (inv: Invoice) => void;
@@ -115,7 +113,7 @@ export default function InvoicesView({
                       ))}
                     </select>
                   </td>
-                  <td style={{ ...td, textAlign: "right", fontWeight: 800, fontFamily: "'Space Grotesk'" }}>{money(t.total, currency)}</td>
+                  <td style={{ ...td, textAlign: "right", fontWeight: 800, fontFamily: "'Space Grotesk'" }}>{money(t.total)}</td>
                   <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
                     <Act onClick={() => onPreview(inv)} color="#5b6478">View</Act>
                     <Act onClick={() => onOpen(inv)} color="#2f6bed">Edit</Act>

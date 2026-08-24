@@ -51,7 +51,7 @@ export interface Invoice {
   id: string;
   number: string;
   status: InvoiceStatus;
-  currency: string;
+  currency: string; // always EGP today — see CURRENCY in lib/calc
   date: string;
   dueDate: string;
   supplierId: string;

@@ -4,7 +4,7 @@ import React, { useMemo, useRef, useState } from "react";
 import type { Customer, Invoice, InvoiceLine, InvoiceStatus, Product, Supplier } from "@/lib/domain";
 import { genId } from "@/lib/domain";
 import type { Column, TemplateRecord } from "@/lib/templateTypes";
-import { compLine, compTotals, money, CURRENCIES, taxOf } from "@/lib/calc";
+import { compLine, compTotals, money, CURRENCY, taxOf } from "@/lib/calc";
 import InvoicePaper from "./InvoicePaper";
 
 type Kind = "suppliers" | "customers";
@@ -14,13 +14,14 @@ interface Draft {
   date: string;
   dueDate: string;
   status: InvoiceStatus;
-  currency: string;
   supplierId: string;
   customerId: string;
   templateId: string | null;
-  amountPaid: number;
+  // Money fields hold the raw input text while being typed (so "12.5" survives
+  // the intermediate "12.") and are coerced with `+` at math/save time.
+  amountPaid: number | string;
   taxEnabled: boolean;
-  taxRate: number;
+  taxRate: number | string;
   lines: InvoiceLine[];
 }
 
@@ -31,7 +32,6 @@ export default function InvoiceWizard({
   customers,
   products,
   templates,
-  currency,
   initial,
   onSaved,
   onCancel,
@@ -41,11 +41,10 @@ export default function InvoiceWizard({
   customers: Customer[];
   products: Product[];
   templates: TemplateRecord[];
-  currency: string;
   initial: Invoice | null;
   onSaved: (inv: Invoice) => void;
   onCancel: () => void;
-  onCreateEntity: (kind: Kind, data: Record<string, string>) => Promise<{ id: string }>;
+  onCreateEntity: (kind: Kind, data: Record<string, string>) => Promise<{ id: string; taxEnabled?: boolean; taxRate?: number }>;
 }) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -61,7 +60,6 @@ export default function InvoiceWizard({
           date: initial.date,
           dueDate: initial.dueDate,
           status: initial.status,
-          currency: initial.currency,
           supplierId: initial.supplierId,
           customerId: initial.customerId,
           templateId: initial.templateId,
@@ -75,7 +73,6 @@ export default function InvoiceWizard({
           date: today(),
           dueDate: today(14),
           status: "Pending",
-          currency,
           supplierId: suppliers[0]?.id || "",
           customerId: customers[0]?.id || "",
           templateId: templates[0]?.id || null,
@@ -103,7 +100,7 @@ export default function InvoiceWizard({
       id: initial?.id || genId("i"),
       number: draft.number,
       status: draft.status,
-      currency: draft.currency,
+      currency: CURRENCY,
       date: draft.date,
       dueDate: draft.dueDate,
       supplierId: draft.supplierId,
@@ -114,9 +111,9 @@ export default function InvoiceWizard({
       customer,
       template: tpl ? tpl.doc : null,
       lines: draft.lines,
-      amountPaid: draft.amountPaid,
+      amountPaid: +draft.amountPaid || 0,
       taxEnabled: draft.taxEnabled,
-      taxRate: draft.taxRate,
+      taxRate: +draft.taxRate || 0,
       total: compTotals(draft.lines, draft.amountPaid, taxOf(draft)).total,
     };
   };
@@ -220,11 +217,6 @@ export default function InvoiceWizard({
                 <PartyPicker label="Your Company (Seller)" value={draft.supplierId} onChange={selectSupplier} options={suppliers.map((s) => ({ id: s.id, label: s.name }))} onAdd={() => setQuickAdd("suppliers")} />
                 <PartyPicker label="Bill To (Customer)" value={draft.customerId} onChange={(v) => set({ customerId: v })} options={customers.map((c) => ({ id: c.id, label: c.store }))} onAdd={() => setQuickAdd("customers")} />
                 <Field label="Invoice #"><input value={draft.number} onChange={(e) => set({ number: e.target.value })} style={inp} /></Field>
-                <Field label="Currency">
-                  <select value={draft.currency} onChange={(e) => set({ currency: e.target.value })} style={inp}>
-                    {CURRENCIES.map((c) => (<option key={c.value} value={c.value}>{c.label}</option>))}
-                  </select>
-                </Field>
                 <Field label="Date"><input type="date" value={toISO(draft.date)} onChange={(e) => set({ date: toDisplay(e.target.value) })} style={inp} /></Field>
                 <Field label="Due Date"><input type="date" value={toISO(draft.dueDate)} onChange={(e) => set({ dueDate: toDisplay(e.target.value) })} style={inp} /></Field>
                 <Field label="Status">
@@ -234,7 +226,7 @@ export default function InvoiceWizard({
                     <option>Overdue</option>
                   </select>
                 </Field>
-                <Field label="Amount Paid"><input value={String(draft.amountPaid)} onChange={(e) => set({ amountPaid: +e.target.value || 0 })} style={inp} /></Field>
+                <Field label="Amount Paid"><input value={String(draft.amountPaid)} onChange={(e) => set({ amountPaid: e.target.value })} style={inp} /></Field>
               </div>
             </>
           )}
@@ -260,7 +252,7 @@ export default function InvoiceWizard({
                     {dropList.map((m) => (
                       <div key={m.id} className="dc-hover-row" onMouseDown={(e) => { e.preventDefault(); addProduct(m.id); setProductQuery(""); setSearchFocused(false); searchRef.current?.blur(); }} style={{ display: "flex", justifyContent: "space-between", padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid #f4f6fb" }}>
                         <div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{m.title}</div><div style={{ fontSize: 10, color: "#9aa3b5", fontWeight: 600 }}>Barcode {m.asin} · {m.sku}</div></div>
-                        <div style={{ fontSize: 12.5, fontWeight: 800, color: "#2f6bed" }}>{money(m.unitPrice, draft.currency)}</div>
+                        <div style={{ fontSize: 12.5, fontWeight: 800, color: "#2f6bed" }}>{money(m.unitPrice)}</div>
                       </div>
                     ))}
                   </div>
@@ -278,7 +270,7 @@ export default function InvoiceWizard({
                       <Mini label="QTY"><input value={String(l.qty)} onChange={(e) => patchLine(i, { qty: e.target.value })} style={miniInp} /></Mini>
                       <Mini label="PRICE"><input value={String(l.unitPrice)} onChange={(e) => patchLine(i, { unitPrice: e.target.value })} style={miniInp} /></Mini>
                       <Mini label="DISC%"><input value={String(l.discountPct)} onChange={(e) => patchLine(i, { discountPct: e.target.value })} style={miniInp} /></Mini>
-                      <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 800, fontFamily: "'Space Grotesk'", minWidth: 84 }}>{money(compLine(l).total, draft.currency)}</div>
+                      <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 800, fontFamily: "'Space Grotesk'", minWidth: 84 }}>{money(compLine(l).total)}</div>
                     </div>
                     {customCols.length > 0 && (
                       <div style={{ display: "grid", gridTemplateColumns: `repeat(${customCols.length}, 1fr)`, gap: 6, marginTop: 8 }}>
@@ -313,19 +305,19 @@ export default function InvoiceWizard({
               </div>
             </div>
             <div style={card}>
-              <Row k="Subtotal" v={money(totals.subtotal, draft.currency)} />
-              <Row k="Discount" v={"−" + money(totals.discount, draft.currency)} c="#d64545" />
+              <Row k="Subtotal" v={money(totals.subtotal)} />
+              <Row k="Discount" v={"−" + money(totals.discount)} c="#d64545" />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#5b6478", cursor: "pointer" }}>
                   <input type="checkbox" checked={draft.taxEnabled} onChange={(e) => set({ taxEnabled: e.target.checked })} style={{ accentColor: "#2f6bed" }} />
                   Tax
-                  <input value={String(draft.taxRate)} onChange={(e) => set({ taxRate: +e.target.value || 0 })} disabled={!draft.taxEnabled} style={{ width: 46, padding: "3px 6px", border: "1px solid #e2e8f5", borderRadius: 6, fontSize: 11.5, fontWeight: 700, textAlign: "right", opacity: draft.taxEnabled ? 1 : 0.5 }} />
+                  <input value={String(draft.taxRate)} onChange={(e) => set({ taxRate: e.target.value })} disabled={!draft.taxEnabled} style={{ width: 46, padding: "3px 6px", border: "1px solid #e2e8f5", borderRadius: 6, fontSize: 11.5, fontWeight: 700, textAlign: "right", opacity: draft.taxEnabled ? 1 : 0.5 }} />
                   <span style={{ color: "#9aa3b5" }}>%</span>
                 </label>
-                <span style={{ fontSize: 12, fontWeight: 700 }}>{money(totals.taxTotal, draft.currency)}</span>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>{money(totals.taxTotal)}</span>
               </div>
               <div style={{ height: 1, background: "#eef1f7", margin: "6px 0" }} />
-              <Row k="Total" v={money(totals.total, draft.currency)} strong />
+              <Row k="Total" v={money(totals.total)} strong />
             </div>
           </div>
         )}
@@ -347,7 +339,9 @@ export default function InvoiceWizard({
       {/* quick-add modal */}
       {quickAdd && <QuickAdd kind={quickAdd} onClose={() => setQuickAdd(null)} onCreate={async (data) => {
         const rec = await onCreateEntity(quickAdd, data);
-        if (quickAdd === "suppliers") set({ supplierId: rec.id });
+        // A brand-new company isn't in `suppliers` yet, so take its tax setting
+        // straight off the saved record instead of looking it up.
+        if (quickAdd === "suppliers") set({ supplierId: rec.id, taxEnabled: !!rec.taxEnabled, taxRate: +(rec.taxRate ?? 0) || 0 });
         else set({ customerId: rec.id });
         setQuickAdd(null);
       }} />}
@@ -358,7 +352,7 @@ export default function InvoiceWizard({
 /* ---------- quick add supplier/customer ---------- */
 function QuickAdd({ kind, onClose, onCreate }: { kind: Kind; onClose: () => void; onCreate: (data: Record<string, string>) => void }) {
   const fields = kind === "suppliers"
-    ? [["name", "Company Name"], ["taxId", "Tax ID / TRN"], ["phone", "Phone"], ["email", "Email"], ["website", "Website"], ["logoText", "Logo Initials"], ["addr", "Address"]]
+    ? [["name", "Company Name"], ["taxId", "Tax ID / TRN"], ["phone", "Phone"], ["email", "Email"], ["website", "Website"], ["taxRate", "Tax % (0 = none)"], ["addr", "Address"]]
     : [["store", "Store Name"], ["contact", "Contact Name"], ["phone", "Phone"], ["email", "Email"], ["billing", "Billing Address"], ["shipping", "Shipping Address"]];
   const [data, setData] = useState<Record<string, string>>({});
   return (

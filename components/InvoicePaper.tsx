@@ -1,10 +1,19 @@
 "use client";
 
 import React from "react";
-import type { Block, ColField, Column, TemplateDoc } from "@/lib/templateTypes";
+import type { Block, ColField, Column, TemplateDoc, TotalRow } from "@/lib/templateTypes";
 import { defaultDoc, fontFamily } from "@/lib/templateTypes";
 import type { Invoice, InvoiceLine } from "@/lib/domain";
 import { compLine, compTotals, money, taxOf } from "@/lib/calc";
+import { HIDE_WHEN_ZERO, fillTokens, hasToken, singleToken } from "@/lib/templateTokens";
+
+/** Formatted + raw values for every {{token}} the totals block can reference. */
+function totalsCtx(t: ReturnType<typeof compTotals>) {
+  const raw: Record<string, number> = { subtotal: t.subtotal, discount: t.discount, tax: t.taxTotal, taxRate: t.taxRate, total: t.total, paid: t.paid, balance: t.balance };
+  const fmt: Record<string, string> = {};
+  Object.keys(raw).forEach((k) => (fmt[k] = k === "taxRate" ? String(raw[k]) : money(raw[k])));
+  return { raw, fmt };
+}
 
 interface RenderCol { id: string; label: string; field: ColField; align: Column["align"]; flex: number }
 
@@ -20,15 +29,15 @@ const STD_COLS: RenderCol[] = [
   { id: "s-amt", label: "Amount", field: "amount", align: "right", flex: 1 },
 ];
 
-function cellValue(col: RenderCol, l: InvoiceLine, i: number, cur: string): React.ReactNode {
+function cellValue(col: RenderCol, l: InvoiceLine, i: number): React.ReactNode {
   switch (col.field) {
     case "index": return i + 1;
     case "description": return l.description || "Item";
     case "asin": return l.asin;
     case "qty": return l.qty;
-    case "rate": return money(+l.unitPrice, cur);
+    case "rate": return money(+l.unitPrice);
     case "discount": return (+l.discountPct || 0) + "%";
-    case "amount": return money(compLine(l).total, cur);
+    case "amount": return money(compLine(l).total);
     case "custom": return (l.custom && l.custom[col.id]) || "";
     default: return "";
   }
@@ -75,7 +84,6 @@ export default InvoicePaper;
 function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; doc: TemplateDoc }) {
   const p = block.props as Record<string, unknown>;
   const page = doc.page;
-  const cur = invoice.currency;
   const muted = "#8a93a6";
   const sup = invoice.supplier;
   const cus = invoice.customer;
@@ -132,55 +140,113 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
       // Tax is invoice-level now (a totals line), so drop any legacy per-row tax column.
       const bound = raw.filter((c) => !c.hidden && c.field && (c.field as string) !== "tax").map((c) => ({ id: c.id, label: c.label, field: c.field as ColField, align: c.align, flex: c.flex }));
       const cols: RenderCol[] = bound.length ? bound : STD_COLS;
-      const gt = cols.map((c) => c.flex + "fr").join(" ");
+      const totalFlex = cols.reduce((a, c) => a + c.flex, 0) || 1;
+      // A real <table><thead> so the browser repeats the column header on every
+      // printed page — the old CSS-grid divs had no such notion of a page break.
+      // borderCollapse:"separate" (not "collapse") keeps the header's rounded
+      // corners from being clipped.
       return (
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ display: "grid", gridTemplateColumns: gt, background: page.primary, color: "#fff", padding: "10px 12px", borderRadius: 6, fontSize: 10.5, fontWeight: 700, letterSpacing: ".3px" }}>
+        <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0, marginBottom: 22 }}>
+          <colgroup>
             {cols.map((c) => (
-              <div key={c.id} style={{ textAlign: c.align }}>{c.label}</div>
+              <col key={c.id} style={{ width: (c.flex / totalFlex) * 100 + "%" }} />
             ))}
-          </div>
-          {(invoice.lines || []).map((l, i) => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: gt, padding: "11px 12px", borderBottom: "1px solid #e8ecf3", fontSize: 11.5, alignItems: "center" }}>
-              {cols.map((c) => (
-                <div
+          </colgroup>
+          <thead>
+            <tr style={{ background: page.primary, color: "#fff" }}>
+              {cols.map((c, i) => (
+                <th
                   key={c.id}
                   style={{
                     textAlign: c.align,
-                    fontWeight: c.field === "description" ? 700 : 400,
-                    fontFamily: c.field === "asin" ? "'Space Grotesk', monospace" : undefined,
-                    fontSize: c.field === "asin" ? 10.5 : undefined,
-                    color: c.field === "asin" ? page.primary : c.field === "index" ? muted : undefined,
+                    padding: "10px 12px",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: ".3px",
+                    borderTopLeftRadius: i === 0 ? 6 : undefined,
+                    borderTopRightRadius: i === cols.length - 1 ? 6 : undefined,
                   }}
                 >
-                  {cellValue(c, l, i, cur)}
-                </div>
+                  {c.label}
+                </th>
               ))}
-            </div>
-          ))}
-        </div>
+            </tr>
+          </thead>
+          <tbody>
+            {(invoice.lines || []).map((l, i) => (
+              <tr key={i} style={{ breakInside: "avoid" }}>
+                {cols.map((c) => (
+                  <td
+                    key={c.id}
+                    style={{
+                      textAlign: c.align,
+                      padding: "11px 12px",
+                      borderBottom: "1px solid #e8ecf3",
+                      fontSize: c.field === "asin" ? 10.5 : 11.5,
+                      fontWeight: c.field === "description" ? 700 : 400,
+                      fontFamily: c.field === "asin" ? "'Space Grotesk', monospace" : undefined,
+                      color: c.field === "asin" ? page.primary : c.field === "index" ? muted : undefined,
+                    }}
+                  >
+                    {cellValue(c, l, i)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       );
     }
     case "totals": {
       const t = compTotals(invoice.lines, invoice.amountPaid, taxOf(invoice));
-      const row = (label: string, val: string, strong?: boolean, color?: string) => (
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: strong ? 14 : 12, fontWeight: strong ? 800 : 500 }}>
+      const row = (label: string, val: string, strong?: boolean, color?: string, key?: React.Key) => (
+        <div key={key} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: strong ? 14 : 12, fontWeight: strong ? 800 : 500 }}>
           <span style={{ color: strong ? "#1e2433" : muted }}>{label}</span>
           <span style={{ fontWeight: strong ? 800 : 700, color: color || "#1e2433" }}>{val}</span>
         </div>
       );
+
+      const customRows = (p.rows as TotalRow[]) || [];
+      const balanceLabel = (p.balanceLabel as string) || "Balance Due";
+      const balanceValue = (p.balanceValue as string) || "";
+      // A template only opts into custom totals once it actually references a
+      // token — older saved templates hold literal sample numbers ("2760.00")
+      // that must never print onto a real invoice, so those fall back below.
+      const tokenized = customRows.some((r) => hasToken(r.label) || hasToken(r.value)) || hasToken(balanceLabel) || hasToken(balanceValue);
+
+      if (tokenized) {
+        const { raw, fmt } = totalsCtx(t);
+        return (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20, breakInside: "avoid" }}>
+            <div style={{ width: 270 }}>
+              {customRows.map((r, i) => {
+                const sole = singleToken(r.value);
+                if (sole && HIDE_WHEN_ZERO.has(sole) && !raw[sole]) return null;
+                return row(fillTokens(r.label, fmt), fillTokens(r.value, fmt), r.strong, undefined, i);
+              })}
+              {(p.showBalance as boolean) && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, padding: "9px 12px", background: page.accent, color: page.accentText, borderRadius: 6, fontSize: 12.5, fontWeight: 800 }}>
+                  <span>{fillTokens(balanceLabel, fmt)}</span>
+                  <span>{fillTokens(balanceValue, fmt)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
       return (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20, breakInside: "avoid" }}>
           <div style={{ width: 270 }}>
-            {row("Subtotal", money(t.subtotal, cur))}
-            {row("Discount", "−" + money(t.discount, cur), false, "#d64545")}
-            {t.taxRate > 0 && row("Tax (" + t.taxRate + "%)", money(t.taxTotal, cur))}
+            {row("Subtotal", money(t.subtotal))}
+            {row("Discount", "−" + money(t.discount), false, "#d64545")}
+            {t.taxRate > 0 && row("Tax (" + t.taxRate + "%)", money(t.taxTotal))}
             <div style={{ height: 1, background: "#e8ecf3", margin: "4px 0" }} />
-            {row("Total", money(t.total, cur), true, page.primary)}
-            {t.paid > 0 && row("Paid", "−" + money(t.paid, cur), false, "#1f9d63")}
+            {row("Total", money(t.total), true, page.primary)}
+            {t.paid > 0 && row("Paid", "−" + money(t.paid), false, "#1f9d63")}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, padding: "9px 12px", background: page.accent, color: page.accentText, borderRadius: 6, fontSize: 12.5, fontWeight: 800 }}>
               <span>Balance Due</span>
-              <span>{money(t.balance, cur)}</span>
+              <span>{money(t.balance)}</span>
             </div>
           </div>
         </div>
