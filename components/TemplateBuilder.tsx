@@ -635,7 +635,13 @@ function EditBody({ block, onPatch }: { block: Block; onPatch: (p: Patch) => voi
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
             {(p.showLogo as boolean) && (
-              <input value={p.logoText as string} onChange={(e) => onPatch({ logoText: e.target.value })} style={{ ...cellInput, width: 46, height: 46, textAlign: "center", fontWeight: 800, background: "#fef3c7", border: "1px solid #f4d78a", borderRadius: 8 }} />
+              <div>
+                <input value={p.logoText as string} onChange={(e) => onPatch({ logoText: e.target.value })} style={{ ...cellInput, width: (p.size as number) || 50, height: (p.size as number) || 50, textAlign: "center", fontWeight: 800, background: "#fef3c7", border: "1px solid #f4d78a", borderRadius: 8 }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                  <input type="range" min={30} max={110} value={(p.size as number) || 50} onChange={(e) => onPatch({ size: +e.target.value })} style={{ accentColor: "#2f6bed", width: 70 }} />
+                  <span style={{ fontSize: 10, color: "#8a93a6" }}>{(p.size as number) || 50}px</span>
+                </div>
+              </div>
             )}
             <div>
               <Inline value={p.supplierName as string} onChange={(v) => onPatch({ supplierName: v })} bold size={15} disabled />
@@ -671,8 +677,12 @@ function EditBody({ block, onPatch }: { block: Block; onPatch: (p: Patch) => voi
       return <TotalsEditor block={block} onPatch={onPatch} />;
     case "logo":
       return (
-        <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
           <input value={p.logoText as string} onChange={(e) => onPatch({ logoText: e.target.value })} style={{ width: (p.size as number) || 54, height: (p.size as number) || 54, textAlign: "center", fontWeight: 800, fontSize: 20, background: "#eef3fd", color: "#2f6bed", border: "1px solid #cfe0fb", borderRadius: 10 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="range" min={30} max={140} value={(p.size as number) || 54} onChange={(e) => onPatch({ size: +e.target.value })} style={{ accentColor: "#2f6bed", width: 90 }} />
+            <span style={{ fontSize: 10, color: "#8a93a6" }}>{(p.size as number) || 54}px</span>
+          </div>
         </div>
       );
     case "heading":

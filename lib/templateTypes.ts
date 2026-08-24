@@ -110,6 +110,7 @@ export function makeBlock(type: BlockType): Block {
           supplierLines: "P.O Box 8223, Tahlia Street\nJeddah, KSA\nTRN 3001234567890",
           showLogo: true,
           logoText: "ZD",
+          size: 50,
           metaRows: [
             { label: "Invoice #", value: "INV-001654" },
             { label: "Date", value: "08 Dec 2025" },

@@ -98,9 +98,9 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
             {(p.showLogo as boolean) &&
               (sup?.logoImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={sup.logoImage} alt="logo" style={{ width: 50, height: 50, borderRadius: 10, objectFit: "contain", background: "#fff", border: "1px solid #eef1f7" }} />
+                <img src={sup.logoImage} alt="logo" style={{ width: (p.size as number) || 50, height: (p.size as number) || 50, objectFit: "contain" }} />
               ) : (
-                <div style={{ width: 50, height: 50, borderRadius: 10, background: page.accent, color: page.accentText, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18 }}>
+                <div style={{ width: (p.size as number) || 50, height: (p.size as number) || 50, borderRadius: 10, background: page.accent, color: page.accentText, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18 }}>
                   {sup?.logoText || (p.logoText as string)}
                 </div>
               ))}
@@ -260,7 +260,7 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
         <div style={{ display: "flex", justifyContent: "center", margin: "6px 0" }}>
           {sup?.logoImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={sup.logoImage} alt="logo" style={{ width: sz, height: sz, borderRadius: 12, objectFit: "contain", background: "#fff", border: "1px solid #eef1f7" }} />
+            <img src={sup.logoImage} alt="logo" style={{ width: sz, height: sz, objectFit: "contain" }} />
           ) : (
             <div style={{ width: sz, height: sz, borderRadius: 12, background: page.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 22 }}>
               {sup?.logoText || (p.logoText as string)}
