@@ -20,7 +20,7 @@ component, then grown into a full invoice system with a WYSIWYG template builder
   Live preview, undo/redo, Save & Publish.
 - **Companies / Customers / Products** — CRUD directories. Companies support a **logo upload**
   (auto‑resized) and a website, both shown on invoices.
-- **Currency** — EGP (default), USD, SAR, EUR.
+- **Currency** — EGP (default), USD and EUR (including Portugal), selected per invoice for preview, print/PDF and invoice lists. Changing currency does not convert amounts. Outstanding balances are grouped by currency.
 - **Print / PDF** — print any invoice (only the invoice paper prints, sized to A4).
 - **Accounts** — email + password sign‑in (Supabase Auth). Each account's data is fully
   isolated by per‑user row‑level security; a fresh account is seeded with demo data.

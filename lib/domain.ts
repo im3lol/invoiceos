@@ -53,7 +53,7 @@ export interface Invoice {
   number: string;
   orderId?: string; // Amazon Order ID, so the invoice traces back to Seller Central
   status: InvoiceStatus;
-  currency: string; // always EGP today — see CURRENCY in lib/calc
+  currency: string; // ISO currency code; legacy invoices default to EGP
   date: string;
   dueDate: string;
   supplierId: string;

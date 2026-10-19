@@ -3,13 +3,17 @@ import type { InvoiceLine } from "./domain";
 /* Money + line/total math — single source of truth used by the class app,
  * the invoice wizard and the renderer. */
 
-/** Single currency for now: the Egyptian pound. Invoices still record it so a
- * future multi-currency change has one obvious hook.
- * ponytail: one currency, no conversion. Add a rate table only if a second one lands. */
+/** Default for existing invoices and catalog prices. No automatic FX conversion. */
 export const CURRENCY = "EGP";
+export const CURRENCIES = [
+  { code: "EGP", label: "Egyptian Pound", symbol: "E\u00a3" },
+  { code: "USD", label: "US Dollar", symbol: "$" },
+  { code: "EUR", label: "Euro (Portugal)", symbol: "\u20ac" },
+] as const;
 
-export function money(n: number): string {
-  return "E£ " + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export function money(n: number, currency: string = CURRENCY): string {
+  const symbol = CURRENCIES.find((c) => c.code === currency)?.symbol || currency;
+  return symbol + " " + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function compLine(l: InvoiceLine) {

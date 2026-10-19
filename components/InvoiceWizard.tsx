@@ -4,12 +4,13 @@ import React, { useMemo, useRef, useState } from "react";
 import type { Customer, Invoice, InvoiceLine, InvoiceStatus, Product, Supplier } from "@/lib/domain";
 import { genId } from "@/lib/domain";
 import type { Column, TemplateRecord } from "@/lib/templateTypes";
-import { compLine, compTotals, money, CURRENCY, taxOf } from "@/lib/calc";
+import { compLine, compTotals, money as formatMoney, CURRENCY, CURRENCIES, taxOf } from "@/lib/calc";
 import InvoicePaper from "./InvoicePaper";
 
 type Kind = "suppliers" | "customers";
 
 interface Draft {
+  currency: string;
   number: string;
   orderId: string;
   date: string;
@@ -57,6 +58,7 @@ export default function InvoiceWizard({
   const [draft, setDraft] = useState<Draft>(() =>
     initial
       ? {
+          currency: initial.currency || CURRENCY,
           number: initial.number,
           orderId: initial.orderId || "",
           date: initial.date,
@@ -71,6 +73,7 @@ export default function InvoiceWizard({
           lines: initial.lines.map((l) => ({ ...l })),
         }
       : {
+          currency: CURRENCY,
           number: "INV-" + String(1000 + Math.floor(Math.random() * 8999)),
           orderId: "",
           date: today(),
@@ -92,6 +95,7 @@ export default function InvoiceWizard({
     const s = suppliers.find((x) => x.id === id);
     setDraft((d) => ({ ...d, supplierId: id, taxEnabled: !!s?.taxEnabled, taxRate: +(s?.taxRate ?? 0) || 0 }));
   };
+  const money = (n: number) => formatMoney(n, draft.currency);
   const totals = compTotals(draft.lines, draft.amountPaid, taxOf(draft));
 
   /* build the render-ready Invoice from the draft */
@@ -104,7 +108,7 @@ export default function InvoiceWizard({
       number: draft.number,
       orderId: draft.orderId || undefined,
       status: draft.status,
-      currency: CURRENCY,
+      currency: draft.currency,
       date: draft.date,
       dueDate: draft.dueDate,
       supplierId: draft.supplierId,
@@ -230,6 +234,13 @@ export default function InvoiceWizard({
                     <option>Paid</option>
                     <option>Overdue</option>
                   </select>
+                </Field>
+                <Field label="Invoice currency">
+                  <select aria-label="Invoice currency" value={draft.currency} onChange={(e) => set({ currency: e.target.value })} style={inp}>
+                    {!CURRENCIES.some((c) => c.code === draft.currency) && <option value={draft.currency}>{draft.currency}</option>}
+                    {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} - {c.label} ({c.symbol})</option>)}
+                  </select>
+                  <div style={{ fontSize: 11, color: "#7c8598", marginTop: 5 }}>Enter prices and payments in this currency. Changing currency keeps the same amounts; no exchange conversion.</div>
                 </Field>
                 <Field label="Amount Paid"><input value={String(draft.amountPaid)} onChange={(e) => set({ amountPaid: e.target.value })} style={inp} /></Field>
               </div>

@@ -19,6 +19,10 @@ assert.equal(money(1234.5), "E£ 1,234.50");
 assert.equal(money(0), "E£ 0.00");
 assert.equal(money(NaN), "E£ 0.00");
 
+assert.equal(money(1234.5, "USD"), "$ 1,234.50");
+assert.equal(money(1234.5, "EUR"), "\u20ac 1,234.50");
+assert.equal(money(12, "SAR"), "SAR 12.00");
+
 // a line: net minus its own discount, from strings too
 assert.deepEqual(compLine(line(2, 100, 10)), { net: 200, dAmt: 20, total: 180 });
 assert.deepEqual(compLine(line("2", "100", "10")), { net: 200, dAmt: 20, total: 180 });

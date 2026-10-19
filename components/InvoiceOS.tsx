@@ -276,13 +276,17 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
       products: ["Products", "ASIN / SKU catalog"],
     };
     const totals = st.invoices.map((i) => ({ inv: i, t: compTotals(i.lines, i.amountPaid, taxOf(i)) }));
-    const outstanding = totals.filter((x) => x.inv.status !== "Paid").reduce((a, x) => a + x.t.total, 0);
+    const outstanding = new Map<string, number>();
+    totals.filter((x) => x.inv.status !== "Paid").forEach(({ inv, t }) => {
+      const currency = inv.currency || "EGP";
+      outstanding.set(currency, (outstanding.get(currency) || 0) + t.balance);
+    });
     const overdueCount = st.invoices.filter((i) => i.status === "Overdue").length;
     const paidCount = st.invoices.filter((i) => i.status === "Paid").length;
     const metrics = {
       invoices: String(st.invoices.length),
       products: String(st.products.length),
-      outstanding: money(outstanding),
+      outstanding: outstanding.size ? Array.from(outstanding, ([currency, amount]) => money(amount, currency)).join(" / ") : money(0),
       paidLine: paidCount + " paid · " + (st.invoices.length - paidCount) + " open",
       overdueLine: overdueCount + " overdue invoices",
     };
@@ -532,7 +536,7 @@ export default class InvoiceOS extends React.Component<InvoiceOSProps, State> {
                     <td style={{ padding: "12px 6px", borderBottom: "1px solid #f4f6fb", fontSize: "13px" }}>{inv.customer?.store || "—"}</td>
                     <td style={{ padding: "12px 6px", borderBottom: "1px solid #f4f6fb", fontSize: "13px", color: "#7c8598" }}>{inv.date}</td>
                     <td style={{ padding: "12px 6px", borderBottom: "1px solid #f4f6fb" }}><span style={{ fontSize: "11px", fontWeight: "700", padding: "4px 9px", borderRadius: "20px", background: c.bg, color: c.fg }}>{inv.status}</span></td>
-                    <td style={{ padding: "12px 6px", borderBottom: "1px solid #f4f6fb", textAlign: "right", fontWeight: "800", fontSize: "13px", fontFamily: "'Space Grotesk'" }}>{money(compTotals(inv.lines, inv.amountPaid, taxOf(inv)).total)}</td>
+                    <td style={{ padding: "12px 6px", borderBottom: "1px solid #f4f6fb", textAlign: "right", fontWeight: "800", fontSize: "13px", fontFamily: "'Space Grotesk'" }}>{money(compTotals(inv.lines, inv.amountPaid, taxOf(inv)).total, inv.currency)}</td>
                     <td style={{ padding: "12px 6px", borderBottom: "1px solid #f4f6fb", textAlign: "right" }}><button onClick={() => this.editInvoice(inv)} style={{ border: "1px solid #e2e8f5", background: "#fff", color: "#2f6bed", fontWeight: "700", fontSize: "11.5px", padding: "5px 11px", borderRadius: "7px", cursor: "pointer" }}>Open</button></td>
                   </tr>
                 );

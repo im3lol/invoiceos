@@ -113,7 +113,7 @@ export default function InvoicesView({
                       ))}
                     </select>
                   </td>
-                  <td style={{ ...td, textAlign: "right", fontWeight: 800, fontFamily: "'Space Grotesk'" }}>{money(t.total)}</td>
+                  <td style={{ ...td, textAlign: "right", fontWeight: 800, fontFamily: "'Space Grotesk'" }}>{money(t.total, inv.currency)}</td>
                   <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
                     <Act onClick={() => onPreview(inv)} color="#5b6478">View</Act>
                     <Act onClick={() => onOpen(inv)} color="#2f6bed">Edit</Act>

@@ -4,14 +4,14 @@ import React from "react";
 import type { Block, ColField, Column, TemplateDoc, TotalRow } from "@/lib/templateTypes";
 import { defaultDoc, fontFamily } from "@/lib/templateTypes";
 import type { Invoice, InvoiceLine } from "@/lib/domain";
-import { compLine, compTotals, money, taxOf } from "@/lib/calc";
+import { compLine, compTotals, money as formatMoney, taxOf } from "@/lib/calc";
 import { HIDE_WHEN_ZERO, fillTokens, hasToken, singleToken } from "@/lib/templateTokens";
 
 /** Formatted + raw values for every {{token}} the totals block can reference. */
-function totalsCtx(t: ReturnType<typeof compTotals>) {
+function totalsCtx(t: ReturnType<typeof compTotals>, currency: string) {
   const raw: Record<string, number> = { subtotal: t.subtotal, discount: t.discount, tax: t.taxTotal, taxRate: t.taxRate, total: t.total, paid: t.paid, balance: t.balance };
   const fmt: Record<string, string> = {};
-  Object.keys(raw).forEach((k) => (fmt[k] = k === "taxRate" ? String(raw[k]) : money(raw[k])));
+  Object.keys(raw).forEach((k) => (fmt[k] = k === "taxRate" ? String(raw[k]) : formatMoney(raw[k], currency)));
   return { raw, fmt };
 }
 
@@ -29,7 +29,8 @@ const STD_COLS: RenderCol[] = [
   { id: "s-amt", label: "Amount", field: "amount", align: "right", flex: 1 },
 ];
 
-function cellValue(col: RenderCol, l: InvoiceLine, i: number): React.ReactNode {
+function cellValue(col: RenderCol, l: InvoiceLine, i: number, currency: string): React.ReactNode {
+  const money = (n: number) => formatMoney(n, currency);
   switch (col.field) {
     case "index": return i + 1;
     case "description": return l.description || "Item";
@@ -83,6 +84,7 @@ const InvoicePaper = React.memo(InvoicePaperBase);
 export default InvoicePaper;
 
 function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; doc: TemplateDoc }) {
+  const money = (n: number) => formatMoney(n, invoice.currency);
   const p = block.props as Record<string, unknown>;
   const page = doc.page;
   const muted = "#8a93a6";
@@ -190,7 +192,7 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
                       color: c.field === "asin" ? page.primary : c.field === "index" ? muted : undefined,
                     }}
                   >
-                    {cellValue(c, l, i)}
+                    {cellValue(c, l, i, invoice.currency)}
                   </td>
                 ))}
               </tr>
@@ -217,7 +219,7 @@ function RenderBlock({ block, invoice, doc }: { block: Block; invoice: Invoice; 
       const tokenized = customRows.some((r) => hasToken(r.label) || hasToken(r.value)) || hasToken(balanceLabel) || hasToken(balanceValue);
 
       if (tokenized) {
-        const { raw, fmt } = totalsCtx(t);
+        const { raw, fmt } = totalsCtx(t, invoice.currency);
         return (
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20, breakInside: "avoid" }}>
             <div style={{ width: 270 }}>
